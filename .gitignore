@@ -1,4 +1,5 @@
 node_modules
+.direnv/
 .bun
 .turbo
 .DS_Store
@@ -32,3 +33,4 @@ node_modules/
 *.log
 .env*
 !.env.example
+!.envrc
