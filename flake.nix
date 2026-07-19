@@ -74,11 +74,7 @@
 
             shellHook = ''
               export VEX_CODE_ROOT="$PWD"
-              export COREPACK_HOME="$PWD/.direnv/corepack"
-              export PNPM_HOME="$PWD/.direnv/pnpm"
-              export PATH="$PWD/node_modules/.bin:$PNPM_HOME:$PATH"
-
-              mkdir -p "$COREPACK_HOME" "$PNPM_HOME"
+              export PATH="$PWD/node_modules/.bin:$PATH"
             '';
           };
         }
