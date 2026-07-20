@@ -192,6 +192,16 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
       Effect.succeed({ threadId, turns: [] }),
   );
 
+  const getMcpStatus = vi.fn((_threadId: ThreadId) =>
+    Effect.succeed([
+      {
+        name: "t3-code",
+        status: "connected" as const,
+        tools: [{ name: "preview_status" }],
+      },
+    ]),
+  );
+
   const stopAll = vi.fn(
     (): Effect.Effect<void, ProviderAdapterError> =>
       Effect.sync(() => {
@@ -213,6 +223,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     listSessions,
     hasSession,
     readThread,
+    getMcpStatus,
     rollbackThread,
     stopAll,
     get streamEvents() {
@@ -248,6 +259,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     listSessions,
     hasSession,
     readThread,
+    getMcpStatus,
     rollbackThread,
     stopAll,
   };
@@ -841,6 +853,39 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("reports inactive and active MCP status without recovering a stopped session", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const inactive = yield* provider.getMcpStatus(asThreadId("thread-not-started"));
+      assert.equal(inactive.availability, "inactive");
+      assert.deepEqual(inactive.servers, []);
+
+      const session = yield* provider.startSession(asThreadId("thread-mcp"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-mcp"),
+        cwd: "/tmp/project",
+        runtimeMode: "full-access",
+      });
+      const active = yield* provider.getMcpStatus(session.threadId);
+      assert.equal(active.availability, "available");
+      assert.equal(active.provider, "codex");
+      assert.deepEqual(active.servers, [
+        {
+          name: "t3-code",
+          status: "connected",
+          tools: [{ name: "preview_status" }],
+        },
+      ]);
+
+      const startsBeforeStop = routing.codex.startSession.mock.calls.length;
+      yield* provider.stopSession({ threadId: session.threadId });
+      const stopped = yield* provider.getMcpStatus(session.threadId);
+      assert.equal(stopped.availability, "inactive");
+      assert.equal(routing.codex.startSession.mock.calls.length, startsBeforeStop);
+    }),
+  );
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

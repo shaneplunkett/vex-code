@@ -26,6 +26,7 @@ export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
+  getMcpStatus: "orchestration.getMcpStatus",
   replayEvents: "orchestration.replayEvents",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
@@ -1232,6 +1233,57 @@ export type OrchestrationGetFullThreadDiffInput = typeof OrchestrationGetFullThr
 export const OrchestrationGetFullThreadDiffResult = ThreadTurnDiff;
 export type OrchestrationGetFullThreadDiffResult = typeof OrchestrationGetFullThreadDiffResult.Type;
 
+export const ProviderMcpServerConnectionStatus = Schema.Literals([
+  "connected",
+  "connecting",
+  "failed",
+  "needs-auth",
+  "disabled",
+  "unknown",
+]);
+export type ProviderMcpServerConnectionStatus = typeof ProviderMcpServerConnectionStatus.Type;
+
+export const ProviderMcpServerTool = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  description: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type ProviderMcpServerTool = typeof ProviderMcpServerTool.Type;
+
+export const ProviderMcpServerStatus = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  status: ProviderMcpServerConnectionStatus,
+  error: Schema.optionalKey(TrimmedNonEmptyString),
+  scope: Schema.optionalKey(TrimmedNonEmptyString),
+  serverInfo: Schema.optionalKey(
+    Schema.Struct({
+      name: TrimmedNonEmptyString,
+      version: TrimmedNonEmptyString,
+    }),
+  ),
+  tools: Schema.Array(ProviderMcpServerTool),
+});
+export type ProviderMcpServerStatus = typeof ProviderMcpServerStatus.Type;
+
+export const ProviderMcpStatusAvailability = Schema.Literals([
+  "available",
+  "inactive",
+  "unsupported",
+]);
+export type ProviderMcpStatusAvailability = typeof ProviderMcpStatusAvailability.Type;
+
+export const OrchestrationGetMcpStatusInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestrationGetMcpStatusInput = typeof OrchestrationGetMcpStatusInput.Type;
+
+export const OrchestrationGetMcpStatusResult = Schema.Struct({
+  availability: ProviderMcpStatusAvailability,
+  provider: Schema.optionalKey(Schema.String),
+  servers: Schema.Array(ProviderMcpServerStatus),
+  checkedAt: IsoDateTime,
+});
+export type OrchestrationGetMcpStatusResult = typeof OrchestrationGetMcpStatusResult.Type;
+
 export const OrchestrationReplayEventsInput = Schema.Struct({
   fromSequenceExclusive: NonNegativeInt,
 });
@@ -1253,6 +1305,10 @@ export const OrchestrationRpcSchemas = {
     input: OrchestrationGetFullThreadDiffInput,
     output: OrchestrationGetFullThreadDiffResult,
   },
+  getMcpStatus: {
+    input: OrchestrationGetMcpStatusInput,
+    output: OrchestrationGetMcpStatusResult,
+  },
   replayEvents: {
     input: OrchestrationReplayEventsInput,
     output: OrchestrationReplayEventsResult,
@@ -1273,6 +1329,14 @@ export const OrchestrationRpcSchemas = {
 
 export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<OrchestrationGetSnapshotError>()(
   "OrchestrationGetSnapshotError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationGetMcpStatusError extends Schema.TaggedErrorClass<OrchestrationGetMcpStatusError>()(
+  "OrchestrationGetMcpStatusError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

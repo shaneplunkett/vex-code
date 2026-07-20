@@ -12,6 +12,7 @@ import {
   ProviderItemId,
   type ProviderApprovalDecision,
   type ProviderEvent,
+  type ProviderMcpServerStatus,
   type ProviderSession,
   type ProviderTurnStartResult,
   type ProviderUserInputAnswers,
@@ -114,6 +115,7 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   );
 
   public readonly closeImpl = vi.fn(() => Promise.resolve(undefined));
+  public mcpStatuses: ReadonlyArray<ProviderMcpServerStatus> = [];
 
   readonly options: CodexSessionRuntimeOptions;
 
@@ -136,6 +138,8 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
   }
 
   readThread = Effect.promise(() => this.readThreadImpl());
+
+  getMcpStatus = Effect.sync(() => this.mcpStatuses);
 
   rollbackThread(numTurns: number) {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
@@ -448,6 +452,30 @@ function startLifecycleRuntime() {
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("reads MCP connection status from the active Codex runtime", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      runtime.mcpStatuses = [
+        {
+          name: "t3-code",
+          status: "connected",
+          serverInfo: { name: "t3-code", version: "1.0.0" },
+          tools: [{ name: "preview_status" }],
+        },
+        {
+          name: "github",
+          status: "needs-auth",
+          error: "Login required",
+          tools: [],
+        },
+      ];
+
+      const statuses = yield* adapter.getMcpStatus!(asThreadId("thread-1"));
+
+      NodeAssert.deepStrictEqual(statuses, runtime.mcpStatuses);
+    }),
+  );
+
   it.effect("maps completed agent message items to canonical item.completed events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

@@ -1588,6 +1588,16 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       })),
     );
 
+  const getMcpStatus: NonNullable<CodexAdapterShape["getMcpStatus"]> = (threadId) =>
+    requireSession(threadId).pipe(
+      Effect.flatMap((session) => session.runtime.getMcpStatus),
+      Effect.mapError((cause) =>
+        cause._tag === "ProviderAdapterSessionNotFoundError"
+          ? cause
+          : mapCodexRuntimeError(threadId, "mcpServerStatus/list", cause),
+      ),
+    );
+
   const rollbackThread: CodexAdapterShape["rollbackThread"] = (threadId, numTurns) => {
     if (!Number.isInteger(numTurns) || numTurns < 1) {
       return Effect.fail(
@@ -1705,6 +1715,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     stopSession,
     listSessions,
     hasSession,
+    getMcpStatus,
     stopAll,
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);

@@ -12,6 +12,7 @@
 import {
   ModelSelection,
   NonNegativeInt,
+  type OrchestrationGetMcpStatusResult,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -967,6 +968,49 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const getInstanceInfo: ProviderServiceMethod<"getInstanceInfo"> = (instanceId) =>
     registry.getInstanceInfo(instanceId);
 
+  const getMcpStatus: ProviderServiceMethod<"getMcpStatus"> = Effect.fn(
+    "ProviderService.getMcpStatus",
+  )(function* (threadId) {
+    const checkedAt = yield* nowIso;
+    const binding = Option.getOrUndefined(yield* directory.getBinding(threadId));
+    if (!binding) {
+      return {
+        availability: "inactive",
+        servers: [],
+        checkedAt,
+      } satisfies OrchestrationGetMcpStatusResult;
+    }
+    const routed = yield* resolveRoutableSession({
+      threadId,
+      operation: "ProviderService.getMcpStatus",
+      allowRecovery: false,
+    });
+    const base = {
+      provider: routed.adapter.provider,
+      checkedAt,
+    } as const;
+    if (!routed.isActive) {
+      return {
+        ...base,
+        availability: "inactive",
+        servers: [],
+      } satisfies OrchestrationGetMcpStatusResult;
+    }
+    if (!routed.adapter.getMcpStatus) {
+      return {
+        ...base,
+        availability: "unsupported",
+        servers: [],
+      } satisfies OrchestrationGetMcpStatusResult;
+    }
+    const servers = yield* routed.adapter.getMcpStatus(threadId);
+    return {
+      ...base,
+      availability: "available",
+      servers,
+    } satisfies OrchestrationGetMcpStatusResult;
+  });
+
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
@@ -1078,6 +1122,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     listSessions,
     getCapabilities,
     getInstanceInfo,
+    getMcpStatus,
     rollbackConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each

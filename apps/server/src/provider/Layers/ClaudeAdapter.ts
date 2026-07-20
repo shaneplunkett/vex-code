@@ -19,6 +19,7 @@ import {
   type SettingSource,
   type SDKUserMessage,
   type ModelUsage,
+  type McpServerStatus,
 } from "@anthropic-ai/claude-agent-sdk";
 import { parseCliArgs } from "@t3tools/shared/cliArgs";
 import {
@@ -34,6 +35,7 @@ import {
   ProviderItemId,
   type ProviderRuntimeEvent,
   type ProviderRuntimeTurnStatus,
+  type ProviderMcpServerStatus,
   type ProviderSendTurnInput,
   type ProviderSession,
   type ThreadTokenUsageSnapshot,
@@ -208,6 +210,7 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly setPermissionMode: (mode: PermissionMode) => Promise<void>;
   readonly setMaxThinkingTokens: (maxThinkingTokens: number | null) => Promise<void>;
   readonly getContextUsage?: () => Promise<SDKControlGetContextUsageResponse>;
+  readonly mcpServerStatus: () => Promise<McpServerStatus[]>;
   readonly close: () => void;
 }
 
@@ -3758,6 +3761,43 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  const getMcpStatus: NonNullable<ClaudeAdapterShape["getMcpStatus"]> = Effect.fn("getMcpStatus")(
+    function* (threadId) {
+      const context = yield* requireSession(threadId);
+      const statuses = yield* Effect.tryPromise({
+        try: () => context.query.mcpServerStatus(),
+        catch: (cause) => toRequestError(threadId, "mcpServerStatus", cause),
+      });
+      return statuses.map((server): ProviderMcpServerStatus => {
+        const status: ProviderMcpServerStatus["status"] =
+          server.status === "pending" ? "connecting" : server.status;
+        const error = server.error?.trim();
+        const scope = server.scope?.trim();
+        return {
+          name: server.name,
+          status,
+          ...(error ? { error } : {}),
+          ...(scope ? { scope } : {}),
+          ...(server.serverInfo
+            ? {
+                serverInfo: {
+                  name: server.serverInfo.name,
+                  version: server.serverInfo.version,
+                },
+              }
+            : {}),
+          tools: (server.tools ?? []).map((tool) => {
+            const description = tool.description?.trim();
+            return {
+              name: tool.name,
+              ...(description ? { description } : {}),
+            };
+          }),
+        };
+      });
+    },
+  );
+
   const rollbackThread: ClaudeAdapterShape["rollbackThread"] = Effect.fn("rollbackThread")(
     function* (threadId, numTurns) {
       const context = yield* requireSession(threadId);
@@ -3861,6 +3901,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     stopSession,
     listSessions,
     hasSession,
+    getMcpStatus,
     stopAll,
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);

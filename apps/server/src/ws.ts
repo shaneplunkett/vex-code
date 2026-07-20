@@ -29,10 +29,12 @@ import {
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
+  type OrchestrationGetMcpStatusResult,
   type OrchestrationShellStreamEvent,
   type OrchestrationShellStreamItem,
   type OrchestrationThreadStreamItem,
   OrchestrationGetFullThreadDiffError,
+  OrchestrationGetMcpStatusError,
   OrchestrationGetSnapshotError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
@@ -76,6 +78,8 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import * as ProviderService from "./provider/Services/ProviderService.ts";
+import type { ProviderServiceError } from "./provider/Errors.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -280,6 +284,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [ORCHESTRATION_WS_METHODS.dispatchCommand, AuthOrchestrationOperateScope],
   [ORCHESTRATION_WS_METHODS.getTurnDiff, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.getFullThreadDiff, AuthOrchestrationReadScope],
+  [ORCHESTRATION_WS_METHODS.getMcpStatus, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.replayEvents, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.subscribeShell, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot, AuthOrchestrationReadScope],
@@ -408,6 +413,8 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const providerService: ProviderService.ProviderService["Service"] | undefined =
+        Option.getOrUndefined(yield* Effect.serviceOption(ProviderService.ProviderService));
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const config = yield* ServerConfig.ServerConfig;
       const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
@@ -455,6 +462,18 @@ const makeWsRpcLayer = (
         currentSession.scopes.includes(requiredScope)
           ? stream
           : Stream.fail(authorizationError(requiredScope));
+      const getMcpStatus = (
+        threadId: ThreadId,
+      ): Effect.Effect<OrchestrationGetMcpStatusResult, ProviderServiceError> =>
+        providerService
+          ? providerService.getMcpStatus(threadId)
+          : nowIso.pipe(
+              Effect.map((checkedAt) => ({
+                availability: "inactive" as const,
+                servers: [],
+                checkedAt,
+              })),
+            );
       const requiredScopeForMethod = (method: string): AuthEnvironmentScope => {
         const requiredScope = RPC_REQUIRED_SCOPE.get(method);
         if (requiredScope === undefined) {
@@ -1032,6 +1051,20 @@ const makeWsRpcLayer = (
                 (cause) =>
                   new OrchestrationGetFullThreadDiffError({
                     message: "Failed to load full thread diff",
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.getMcpStatus]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getMcpStatus,
+            getMcpStatus(input.threadId).pipe(
+              Effect.mapError(
+                (cause: ProviderServiceError) =>
+                  new OrchestrationGetMcpStatusError({
+                    message: "Failed to load MCP server status",
                     cause,
                   }),
               ),

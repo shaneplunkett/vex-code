@@ -13,6 +13,7 @@ import type {
   ProviderDriverKind,
   ProviderUserInputAnswers,
   ProviderRuntimeEvent,
+  ProviderMcpServerStatus,
   ProviderSendTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
@@ -100,6 +101,14 @@ export interface ProviderAdapterShape<TError> {
    * Check whether this adapter owns an active session id.
    */
   readonly hasSession: (threadId: ThreadId) => Effect.Effect<boolean>;
+
+  /**
+   * Read the provider-native MCP connection inventory for an active session.
+   * Omitted by providers that do not expose MCP status introspection.
+   */
+  readonly getMcpStatus?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<ProviderMcpServerStatus>, TError>;
 
   /**
    * Read a provider thread snapshot.
