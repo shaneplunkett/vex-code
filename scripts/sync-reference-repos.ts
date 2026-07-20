@@ -91,11 +91,32 @@ export class ReferenceRepoGitSubtreeError extends Schema.TaggedErrorClass<Refere
   }
 }
 
+export class ReferenceRepoNestedGitlinkError extends Schema.TaggedErrorClass<ReferenceRepoNestedGitlinkError>()(
+  "ReferenceRepoNestedGitlinkError",
+  {
+    operation: Schema.Literals(["spawn", "communicate", "exit", "validate"]),
+    repoId: Schema.String,
+    rootDir: Schema.String,
+    paths: Schema.Array(Schema.String),
+    exitCode: Schema.optional(Schema.Number),
+    stdoutLength: Schema.optional(Schema.Number),
+    stderrLength: Schema.optional(Schema.Number),
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.operation === "validate"
+      ? `Reference repo "${this.repoId}" contains nested Git links: ${this.paths.join(", ")}.`
+      : `Reference repo "${this.repoId}" nested Git link check failed during "${this.operation}".`;
+  }
+}
+
 export const ReferenceRepoSyncError = Schema.Union([
   ReferenceRepoSelectionError,
   ReferenceRepoVersionSourceError,
   ReferenceRepoVersionResolutionError,
   ReferenceRepoGitSubtreeError,
+  ReferenceRepoNestedGitlinkError,
 ]);
 export type ReferenceRepoSyncError = typeof ReferenceRepoSyncError.Type;
 export const isReferenceRepoSyncError = Schema.is(ReferenceRepoSyncError);
@@ -111,6 +132,18 @@ const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.
       (acc, chunk) => acc + chunk,
     ),
   );
+
+export function parseNestedGitlinkPaths(indexOutput: string): ReadonlyArray<string> {
+  const paths: Array<string> = [];
+  for (const entry of indexOutput.split("\0")) {
+    const separatorIndex = entry.indexOf("\t");
+    if (separatorIndex === -1 || !entry.startsWith("160000 ")) {
+      continue;
+    }
+    paths.push(entry.slice(separatorIndex + 1));
+  }
+  return paths;
+}
 
 function readNestedString(input: unknown, keys: ReadonlyArray<string>): string | undefined {
   let value = input;
@@ -273,6 +306,70 @@ const runGit = Effect.fn("runGit")(function* (rootDir: string, plan: ReferenceRe
   }
 });
 
+const assertNoNestedGitlinks = Effect.fn("assertNoNestedGitlinks")(function* (
+  rootDir: string,
+  repo: ReferenceRepo,
+) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const errorContext = {
+    repoId: repo.id,
+    rootDir,
+    paths: [] as ReadonlyArray<string>,
+  } as const;
+  const child = yield* spawner
+    .spawn(
+      ChildProcess.make("git", ["ls-files", "--stage", "-z", "--", repo.prefix], {
+        cwd: rootDir,
+      }),
+    )
+    .pipe(
+      Effect.mapError(
+        (cause) =>
+          new ReferenceRepoNestedGitlinkError({
+            ...errorContext,
+            operation: "spawn",
+            cause,
+          }),
+      ),
+    );
+  const [stdout, stderr, exitCode] = yield* Effect.all(
+    [
+      collectStreamAsString(child.stdout),
+      collectStreamAsString(child.stderr),
+      child.exitCode.pipe(Effect.map(Number)),
+    ],
+    { concurrency: "unbounded" },
+  ).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ReferenceRepoNestedGitlinkError({
+          ...errorContext,
+          operation: "communicate",
+          cause,
+        }),
+    ),
+  );
+
+  if (exitCode !== 0) {
+    return yield* new ReferenceRepoNestedGitlinkError({
+      ...errorContext,
+      operation: "exit",
+      exitCode,
+      stdoutLength: stdout.length,
+      stderrLength: stderr.length,
+    });
+  }
+
+  const paths = parseNestedGitlinkPaths(stdout);
+  if (paths.length > 0) {
+    return yield* new ReferenceRepoNestedGitlinkError({
+      ...errorContext,
+      operation: "validate",
+      paths,
+    });
+  }
+});
+
 export const syncReferenceRepos = Effect.fn("syncReferenceRepos")(function* (
   options: ReferenceRepoSyncOptions = {},
 ) {
@@ -286,7 +383,9 @@ export const syncReferenceRepos = Effect.fn("syncReferenceRepos")(function* (
     plans.push(plan);
     yield* Console.log(`Syncing ${repo.id} from ${plan.ref} with git subtree ${plan.action}.`);
     if (!(options.dryRun ?? false)) {
+      yield* assertNoNestedGitlinks(rootDir, repo).pipe(Effect.scoped);
       yield* runGit(rootDir, plan).pipe(Effect.scoped);
+      yield* assertNoNestedGitlinks(rootDir, repo).pipe(Effect.scoped);
     }
   }
 

@@ -43,7 +43,7 @@ function mockHandle(
 
 function mockSpawnerLayer(
   commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }>,
-  handle = mockHandle(),
+  handleForCommand: (commandIndex: number) => ReturnType<typeof mockHandle> = () => mockHandle(),
 ) {
   return Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
@@ -52,11 +52,12 @@ function mockSpawnerLayer(
         readonly command: string;
         readonly args: ReadonlyArray<string>;
       };
+      const commandIndex = commands.length;
       commands.push({
         command: childProcess.command,
         args: childProcess.args,
       });
-      return Effect.succeed(handle);
+      return Effect.succeed(handleForCommand(commandIndex));
     }),
   );
 }
@@ -227,6 +228,10 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
       assert.deepStrictEqual(commands, [
         {
           command: "git",
+          args: ["ls-files", "--stage", "-z", "--", ".repos/effect-smol"],
+        },
+        {
+          command: "git",
           args: [
             "subtree",
             "add",
@@ -236,7 +241,84 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
             "--squash",
           ],
         },
+        {
+          command: "git",
+          args: ["ls-files", "--stage", "-z", "--", ".repos/effect-smol"],
+        },
       ]);
+    });
+  });
+
+  it.effect("rejects existing nested gitlinks before syncing", () => {
+    const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = [];
+
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const rootDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "sync-reference-repos-gitlink-",
+      });
+      yield* fs.writeFileString(
+        path.join(rootDir, "pnpm-workspace.yaml"),
+        "catalog:\n  effect: 4.0.0-beta.73\n",
+      );
+
+      const error = yield* syncReferenceRepos({ rootDir, repoId: "effect-smol" }).pipe(
+        Effect.provide(
+          mockSpawnerLayer(commands, (commandIndex) =>
+            commandIndex === 0
+              ? mockHandle({
+                  stdout:
+                    "160000 c9f5e549cf023632c3df948c207a58336192b3c7 0\t.repos/effect-smol/.vendor/alchemy\0",
+                })
+              : mockHandle(),
+          ),
+        ),
+        Effect.flip,
+      );
+
+      if (error._tag !== "ReferenceRepoNestedGitlinkError") {
+        assert.fail(`Unexpected error: ${error._tag}`);
+      }
+      assert.equal(error.repoId, effectSmol.id);
+      assert.deepStrictEqual(error.paths, [".repos/effect-smol/.vendor/alchemy"]);
+      assert.equal(commands.length, 1);
+    });
+  });
+
+  it.effect("rejects nested gitlinks introduced by a subtree sync", () => {
+    const commands: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = [];
+
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const rootDir = yield* fs.makeTempDirectoryScoped({
+        prefix: "sync-reference-repos-new-gitlink-",
+      });
+      yield* fs.writeFileString(
+        path.join(rootDir, "pnpm-workspace.yaml"),
+        "catalog:\n  effect: 4.0.0-beta.73\n",
+      );
+
+      const error = yield* syncReferenceRepos({ rootDir, repoId: "effect-smol" }).pipe(
+        Effect.provide(
+          mockSpawnerLayer(commands, (commandIndex) =>
+            commandIndex === 2
+              ? mockHandle({
+                  stdout:
+                    "160000 c9f5e549cf023632c3df948c207a58336192b3c7 0\t.repos/effect-smol/.vendor/alchemy\0",
+                })
+              : mockHandle(),
+          ),
+        ),
+        Effect.flip,
+      );
+
+      if (error._tag !== "ReferenceRepoNestedGitlinkError") {
+        assert.fail(`Unexpected error: ${error._tag}`);
+      }
+      assert.deepStrictEqual(error.paths, [".repos/effect-smol/.vendor/alchemy"]);
+      assert.equal(commands.length, 3);
     });
   });
 
@@ -272,9 +354,10 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
 
       const error = yield* syncReferenceRepos({ rootDir, repoId: "effect-smol" }).pipe(
         Effect.provide(
-          mockSpawnerLayer(
-            commands,
-            mockHandle({ exitCode: 23, stderr: "subtree failed secret-token-value\n" }),
+          mockSpawnerLayer(commands, (commandIndex) =>
+            commandIndex === 1
+              ? mockHandle({ exitCode: 23, stderr: "subtree failed secret-token-value\n" })
+              : mockHandle(),
           ),
         ),
         Effect.flip,
@@ -289,7 +372,7 @@ it.layer(NodeServices.layer)("sync-reference-repos", (it) => {
       assert.equal(error.repository, effectSmol.repository);
       assert.equal(error.ref, "effect@4.0.0-beta.73");
       assert.equal(error.rootDir, rootDir);
-      assert.equal(error.argumentCount, commands[0]?.args.length);
+      assert.equal(error.argumentCount, commands[1]?.args.length);
       assert.equal(error.exitCode, 23);
       assert.equal(error.stdoutLength, 5);
       assert.equal(error.stderrLength, 34);
