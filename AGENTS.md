@@ -16,9 +16,10 @@ remain easy to update while carrying a narrow Vex-owned product, branding, theme
   `DISABLED`; do not restore a working push URL.
 - Never push a branch, open a pull request or issue, or perform any other write against upstream
   unless Shane explicitly requests that exact upstream action.
-- The GitHub fork intentionally keeps only the core `CI` workflow active. Release, relay deployment,
-  Mobile EAS Preview, Mobile EAS Production, Issue Labels, PR Size, and PR Vouch should remain
-  disabled unless Shane explicitly changes that policy.
+- All GitHub Actions workflows are intentionally disabled for this personal fork, including CI,
+  releases, relay deployment, Mobile EAS, labels, PR Size, and PR Vouch. Do not enable an existing
+  workflow or add a new active workflow unless Shane explicitly requests it. Prefer the required
+  local checks above and lightweight local hooks.
 - Nix packaging lives in `/home/shane/nix-config`. Automated Nix input and dependency-hash updates are
   deliberately deferred until the fork is more stable; do not add them to an upstream sync or edit the
   Nix repository unless explicitly asked.
