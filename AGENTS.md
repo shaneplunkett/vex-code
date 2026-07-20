@@ -6,11 +6,70 @@
   - If changing native mobile code, `vp run lint:mobile` must also pass.
 - Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script.
 
+## Fork Identity and Boundaries
+
+This repository is **Vex Code**, Shane's personal fork of `pingdotgg/t3code`. The fork is intended to
+remain easy to update while carrying a narrow Vex-owned product, branding, theme, and feature layer.
+
+- `origin` is `shaneplunkett/vex-code` and is the only normal push target.
+- `upstream` is `pingdotgg/t3code` and must remain fetch-only. Its push URL is deliberately
+  `DISABLED`; do not restore a working push URL.
+- Never push a branch, open a pull request or issue, or perform any other write against upstream
+  unless Shane explicitly requests that exact upstream action.
+- The GitHub fork intentionally keeps only the core `CI` workflow active. Release, relay deployment,
+  Mobile EAS Preview, Mobile EAS Production, Issue Labels, PR Size, and PR Vouch should remain
+  disabled unless Shane explicitly changes that policy.
+- Nix packaging lives in `/home/shane/nix-config`. Automated Nix input and dependency-hash updates are
+  deliberately deferred until the fork is more stable; do not add them to an upstream sync or edit the
+  Nix repository unless explicitly asked.
+
+## Upstream Maintenance
+
+`main` is the deployable Vex Code branch. Keep its history stable and merge published upstream
+releases into it; do not maintain a separate upstream mirror branch.
+
+- Prefer a published upstream nightly tag over an arbitrary `upstream/main` commit.
+- Use `pnpm sync:upstream --dry-run` to inspect the selected release and `pnpm sync:upstream` to merge
+  it. Use `--tag <tag>` when a particular release is required.
+- The sync command must remain local-first: it may fetch, merge, install dependencies, validate, and
+  create the local merge commit, but it must not push, open a pull request, or update Nix config.
+- Preserve upstream ancestry with a real merge commit. Never squash an upstream sync, rebase the
+  deployable fork onto upstream, or replay upstream as a patch stack.
+- Do not bypass the sync command's clean-worktree, branch, or remote-history guards. Resolve any local
+  divergence first.
+- If a merge conflicts, keep the current upstream core behaviour and reattach Vex-specific behaviour
+  through the narrowest appropriate seam. Do not resolve a broad conflict by blindly taking the whole
+  `ours` or `theirs` side.
+- After manually resolving an interrupted sync, rerun the task completion checks before completing the
+  merge commit.
+
+## Vex Change Architecture
+
+The thin-fork rules in this section take precedence over the general encouragement for sweeping
+maintainability changes below when work is specific to Vex Code.
+
+- Keep Vex-only code together. Prefer `apps/web/src/vex/` for Vex product configuration, assets,
+  theme overrides, components, and feature switches as that layer is introduced.
+- Reuse or extend stable seams such as `apps/web/src/branding.ts`. Upstream-owned components should
+  need only small imports, configuration reads, or adapter hooks into the Vex layer.
+- Visible branding may change, but internal compatibility identifiers should not be renamed without a
+  concrete migration requirement. Preserve names such as `T3CODE_*`, `.t3`, `t3code` URL schemes,
+  persisted storage keys, protocol names, and internal package names.
+- Keep generic fixes and Vex-only customisation separable. A generic improvement should remain
+  upstream-compatible even when it is not being submitted upstream.
+- Avoid broad formatting, mechanical renaming, folder moves, or unrelated cleanup in upstream-owned
+  files. These make future merges harder without improving the fork.
+- Prefer adding a Vex-owned asset or module and selecting it through configuration over replacing an
+  upstream implementation in place.
+- Keep each custom commit focused so the fork's delta remains understandable with
+  `git diff upstream/main...main`.
+
 ## Project Snapshot
 
 T3 Code is a minimal web GUI for using coding agents like Codex and Claude.
 
-This repository is a VERY EARLY WIP. Proposing sweeping changes that improve long-term maintainability is encouraged.
+The upstream project is a VERY EARLY WIP. Sweeping changes that improve shared, upstream-compatible
+architecture can be appropriate, but Vex-specific work must follow the thin-fork rules above.
 
 ## Core Priorities
 
