@@ -78,6 +78,11 @@ code {
   background: color-mix(in srgb, var(--primary) 28%, transparent);
 }
 
+/* Give Vex's Markdown actions the same mauve emphasis as the patched Codex TUI. */
+.chat-markdown em {
+  color: var(--primary);
+}
+
 .ultrathink-frame {
   --ultrathink-spectrum: linear-gradient(
     120deg,
