@@ -10,6 +10,7 @@ import {
   type ProviderInstanceConfig,
   type ProviderInstanceId,
   type ScopedThreadRef,
+  type TerminalShell,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
@@ -51,6 +52,7 @@ import {
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import {
+  primaryServerConfigAtom,
   primaryServerObservabilityAtom,
   primaryServerProvidersAtom,
   serverEnvironment,
@@ -109,6 +111,26 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
+
+const POSIX_TERMINAL_SHELL_OPTIONS: ReadonlyArray<{
+  value: TerminalShell;
+  label: string;
+}> = [
+  { value: "system", label: "System default" },
+  { value: "bash", label: "Bash" },
+  { value: "fish", label: "Fish" },
+  { value: "zsh", label: "Zsh" },
+];
+
+const WINDOWS_TERMINAL_SHELL_OPTIONS: ReadonlyArray<{
+  value: TerminalShell;
+  label: string;
+}> = [
+  { value: "system", label: "System default" },
+  { value: "pwsh", label: "PowerShell" },
+  { value: "powershell", label: "Windows PowerShell" },
+  { value: "cmd", label: "Command Prompt" },
+];
 
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 
@@ -401,6 +423,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
         ? ["Assistant output"]
         : []),
+      ...(settings.terminalShell !== DEFAULT_UNIFIED_SETTINGS.terminalShell
+        ? ["Default shell"]
+        : []),
       ...(Duration.toMillis(settings.automaticGitFetchInterval) !==
       Duration.toMillis(DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval)
         ? ["Automatic Git fetch interval"]
@@ -434,6 +459,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.diffIgnoreWhitespace,
       settings.automaticGitFetchInterval,
       settings.enableAssistantStreaming,
+      settings.terminalShell,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
       settings.wordWrap,
@@ -459,6 +485,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       autoOpenPlanSidebar: DEFAULT_UNIFIED_SETTINGS.autoOpenPlanSidebar,
       enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+      terminalShell: DEFAULT_UNIFIED_SETTINGS.terminalShell,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
       defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
       newWorktreesStartFromOrigin: DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin,
@@ -480,6 +507,7 @@ export function GeneralSettingsPanel() {
   const { theme, setTheme } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
+  const serverConfig = useAtomValue(primaryServerConfigAtom);
   const observability = useAtomValue(primaryServerObservabilityAtom);
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
   const diagnosticsDescription = formatDiagnosticsDescription({
@@ -512,6 +540,13 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const terminalShellOptions =
+    serverConfig?.environment.platform.os === "windows"
+      ? WINDOWS_TERMINAL_SHELL_OPTIONS
+      : POSIX_TERMINAL_SHELL_OPTIONS;
+  const terminalShellLabel =
+    terminalShellOptions.find((option) => option.value === settings.terminalShell)?.label ??
+    settings.terminalShell;
 
   return (
     <SettingsPageContainer>
@@ -586,6 +621,38 @@ export function GeneralSettingsPanel() {
                 <SelectItem hideIndicator value="24-hour">
                   {TIMESTAMP_FORMAT_LABELS["24-hour"]}
                 </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Default shell"
+          description="Used by new and restarted terminals. Falls back to the system shell if unavailable."
+          resetAction={
+            settings.terminalShell !== DEFAULT_UNIFIED_SETTINGS.terminalShell ? (
+              <SettingResetButton
+                label="default shell"
+                onClick={() =>
+                  updateSettings({ terminalShell: DEFAULT_UNIFIED_SETTINGS.terminalShell })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.terminalShell}
+              onValueChange={(value) => updateSettings({ terminalShell: value as TerminalShell })}
+            >
+              <SelectTrigger className="w-full sm:w-48" aria-label="Default terminal shell">
+                <SelectValue>{terminalShellLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {terminalShellOptions.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectPopup>
             </Select>
           }

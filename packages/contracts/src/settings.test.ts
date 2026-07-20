@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
+  DEFAULT_TERMINAL_SHELL,
   DEFAULT_SERVER_SETTINGS,
   ServerSettings,
   ServerSettingsPatch,
@@ -96,6 +97,20 @@ describe("ServerSettings worktree defaults", () => {
     expect(
       decodeServerSettingsPatch({ newWorktreesStartFromOrigin: true }).newWorktreesStartFromOrigin,
     ).toBe(true);
+  });
+});
+
+describe("ServerSettings terminal shell", () => {
+  it("uses the system shell for legacy configs", () => {
+    expect(decodeServerSettings({}).terminalShell).toBe(DEFAULT_TERMINAL_SHELL);
+  });
+
+  it("accepts supported shell updates", () => {
+    expect(decodeServerSettingsPatch({ terminalShell: "fish" }).terminalShell).toBe("fish");
+  });
+
+  it("rejects unknown shell values", () => {
+    expect(() => decodeServerSettingsPatch({ terminalShell: "elvish" })).toThrow();
   });
 });
 
