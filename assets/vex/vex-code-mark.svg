@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Vex Code</title>
+  <desc id="desc">A Catppuccin purple V monogram with code chevrons and witchy sparkles.</desc>
+  <defs>
+    <linearGradient id="background" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#313244"/>
+      <stop offset="1" stop-color="#11111b"/>
+    </linearGradient>
+    <linearGradient id="vex" x1="300" y1="264" x2="724" y2="784" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5c2e7"/>
+      <stop offset="0.48" stop-color="#cba6f7"/>
+      <stop offset="1" stop-color="#89b4fa"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#background)"/>
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="none" stroke="#45475a" stroke-width="12"/>
+  <path d="M278 322 142 512l136 190" fill="none" stroke="#89b4fa" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m746 322 136 190-136 190" fill="none" stroke="#f5c2e7" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m328 292 184 452 184-452" fill="none" stroke="url(#vex)" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m512 166 13 34 34 13-34 13-13 34-13-34-34-13 34-13 13-34Z" fill="#f9e2af"/>
+  <circle cx="693" cy="184" r="15" fill="#94e2d5"/>
+  <circle cx="331" cy="808" r="12" fill="#f9e2af"/>
+</svg>

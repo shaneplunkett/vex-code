@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildPatchCacheKey, getRenderablePatch } from "./diffRendering";
+import { buildPatchCacheKey, getRenderablePatch, resolveDiffThemeName } from "./diffRendering";
+
+describe("resolveDiffThemeName", () => {
+  it("uses Catppuccin for file and diff rendering", () => {
+    expect(resolveDiffThemeName("light")).toBe("catppuccin-latte");
+    expect(resolveDiffThemeName("dark")).toBe("catppuccin-mocha");
+  });
+});
 
 describe("buildPatchCacheKey", () => {
   it("returns a stable cache key for identical content", () => {

@@ -1,4 +1,12 @@
 export const BRAND_ASSET_PATHS = {
+  vexMacIconPng: "assets/vex/vex-code-macos-1024.png",
+  vexLinuxIconPng: "assets/vex/vex-code-universal-1024.png",
+  vexWindowsIconIco: "assets/vex/vex-code-windows.ico",
+  vexWebFaviconIco: "assets/vex/vex-code-web-favicon.ico",
+  vexWebFavicon16Png: "assets/vex/vex-code-web-favicon-16x16.png",
+  vexWebFavicon32Png: "assets/vex/vex-code-web-favicon-32x32.png",
+  vexWebAppleTouchIconPng: "assets/vex/vex-code-web-apple-touch-180.png",
+
   productionMacIconPng: "assets/prod/black-macos-1024.png",
   productionLinuxIconPng: "assets/prod/black-universal-1024.png",
   productionWindowsIconIco: "assets/prod/t3-black-windows.ico",
@@ -47,22 +55,22 @@ const WEB_ICON_TARGET_FILENAMES = {
 
 const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
   development: {
-    faviconIco: BRAND_ASSET_PATHS.developmentWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.developmentWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.developmentWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.developmentWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.vexWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.vexWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.vexWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.vexWebAppleTouchIconPng,
   },
   nightly: {
-    faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.vexWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.vexWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.vexWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.vexWebAppleTouchIconPng,
   },
   production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+    faviconIco: BRAND_ASSET_PATHS.vexWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.vexWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.vexWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.vexWebAppleTouchIconPng,
   },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 

@@ -6,15 +6,15 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#161616" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#161616" />
+    <meta name="theme-color" content="#e6e9ef" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181825" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#181825" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
       (() => {
-        const LIGHT_BACKGROUND = "#ffffff";
-        const DARK_BACKGROUND = "#161616";
+        const LIGHT_BACKGROUND = "#e6e9ef";
+        const DARK_BACKGROUND = "#181825";
         const themeColorMeta = document.querySelector('meta[name="theme-color"]');
         try {
           const storedTheme = window.localStorage.getItem("t3code:theme");
@@ -45,8 +45,8 @@
       }
 
       body {
-        background: #ffffff;
-        color: #262626;
+        background: #e6e9ef;
+        color: #4c4f69;
         font-family:
           "DM Sans Variable",
           "DM Sans",
@@ -58,8 +58,8 @@
       }
 
       html.dark body {
-        background: #161616;
-        color: #f5f5f5;
+        background: #181825;
+        color: #cdd6f4;
       }
 
       #boot-shell {
@@ -84,13 +84,13 @@
         object-fit: contain;
       }
     </style>
-    <title>T3 Code (Alpha)</title>
+    <title>Vex Code (Alpha)</title>
   </head>
   <body>
     <div id="root">
       <div id="boot-shell">
-        <div id="boot-shell-card" aria-label="T3 Code splash screen">
-          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
+        <div id="boot-shell-card" aria-label="Vex Code splash screen">
+          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="Vex Code" />
         </div>
       </div>
     </div>

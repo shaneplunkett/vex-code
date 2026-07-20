@@ -80,6 +80,16 @@ const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
 const FILE_LINK_REVEAL_UNSAFE_CSS = `
+  [data-file] {
+    --diffs-font-family: var(--font-mono) !important;
+    --diffs-bg: var(--background) !important;
+    --diffs-light-bg: var(--background) !important;
+    --diffs-dark-bg: var(--background) !important;
+    --diffs-token-light-bg: transparent;
+    --diffs-token-dark-bg: transparent;
+    background-color: var(--diffs-bg) !important;
+  }
+
   [${FILE_LINK_REVEAL_ATTRIBUTE}][data-line] {
     background-color: light-dark(
       color-mix(
