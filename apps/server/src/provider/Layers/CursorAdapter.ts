@@ -50,7 +50,7 @@ import {
   ProviderAdapterValidationError,
 } from "../Errors.ts";
 import { acpPermissionOutcome, mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
-import type * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
+import * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
@@ -75,6 +75,10 @@ import {
   extractTodosAsPlan,
 } from "../acp/CursorAcpExtension.ts";
 import { type CursorAdapterShape } from "../Services/CursorAdapter.ts";
+import {
+  resolveProviderSessionEnvironment,
+  type ProviderSessionEnvironmentOptions,
+} from "../WorkspaceEnvironment.ts";
 import { resolveCursorAcpBaseModelId } from "./CursorProvider.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
@@ -90,8 +94,7 @@ function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
-export interface CursorAdapterLiveOptions {
-  readonly environment?: NodeJS.ProcessEnv;
+export interface CursorAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   /**
@@ -496,6 +499,12 @@ export function makeCursorAdapter(
           }
 
           const cwd = path.resolve(input.cwd.trim());
+          const sessionEnvironment = yield* resolveProviderSessionEnvironment({
+            sessionEnvironment: options?.sessionEnvironment,
+            cwd,
+            provider: PROVIDER,
+            threadId: input.threadId,
+          });
           const cursorModelSelection =
             input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
           const existing = sessions.get(input.threadId);
@@ -534,7 +543,11 @@ export function makeCursorAdapter(
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
-            ...(options?.environment ? { environment: options.environment } : {}),
+            ...(sessionEnvironment
+              ? {
+                  environment: AcpSessionRuntime.replaceAcpSpawnEnvironment(sessionEnvironment),
+                }
+              : {}),
             childProcessSpawner,
             cwd,
             ...(resumeSessionId ? { resumeSessionId } : {}),

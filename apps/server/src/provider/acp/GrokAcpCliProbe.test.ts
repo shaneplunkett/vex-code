@@ -14,12 +14,13 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { describe, expect } from "vite-plus/test";
 
 import { makeGrokAcpRuntime } from "./GrokAcpSupport.ts";
+import { extendAcpSpawnEnvironment } from "./AcpSessionRuntime.ts";
 
 const makeProbeRuntime = Effect.gen(function* () {
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return yield* makeGrokAcpRuntime({
     grokSettings: { binaryPath: "grok" },
-    environment: process.env,
+    environment: extendAcpSpawnEnvironment(process.env),
     childProcessSpawner,
     cwd: process.cwd(),
     clientInfo: { name: "t3-grok-probe", version: "0.0.0" },

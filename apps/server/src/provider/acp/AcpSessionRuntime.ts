@@ -49,11 +49,24 @@ export type AcpSessionRuntimeEvent = AcpParsedSessionEvent | AcpSessionEventStre
 const defaultSessionLoadTimeout = Duration.seconds(90);
 const defaultSessionLoadReplayIdleGap = Duration.seconds(2);
 
+export interface AcpSpawnEnvironment {
+  readonly values: NodeJS.ProcessEnv;
+  readonly mode: "extend" | "replace";
+}
+
+export function extendAcpSpawnEnvironment(values: NodeJS.ProcessEnv): AcpSpawnEnvironment {
+  return { values, mode: "extend" };
+}
+
+export function replaceAcpSpawnEnvironment(values: NodeJS.ProcessEnv): AcpSpawnEnvironment {
+  return { values, mode: "replace" };
+}
+
 export interface AcpSpawnInput {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly cwd?: string;
-  readonly env?: NodeJS.ProcessEnv;
+  readonly environment?: AcpSpawnEnvironment;
 }
 
 export interface AcpSessionRuntimeOptions {
@@ -318,16 +331,22 @@ export const make = (
         ),
       );
 
+    const spawnEnvironment = options.spawn.environment
+      ? {
+          env: options.spawn.environment.values,
+          extendEnv: options.spawn.environment.mode === "extend",
+        }
+      : {};
     const spawnCommand = yield* resolveSpawnCommand(
       options.spawn.command,
       options.spawn.args,
-      options.spawn.env ? { env: options.spawn.env, extendEnv: true } : {},
+      spawnEnvironment,
     );
     const child = yield* spawner
       .spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           ...(options.spawn.cwd ? { cwd: options.spawn.cwd } : {}),
-          ...(options.spawn.env ? { env: options.spawn.env, extendEnv: true } : {}),
+          ...spawnEnvironment,
           shell: spawnCommand.shell,
         }),
       )

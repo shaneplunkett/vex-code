@@ -25,6 +25,7 @@ import {
   applyCursorAcpModelSelection,
   makeCursorAcpRuntime,
 } from "../provider/acp/CursorAcpSupport.ts";
+import { extendAcpSpawnEnvironment } from "../provider/acp/AcpSessionRuntime.ts";
 
 const CURSOR_TIMEOUT_MS = 180_000;
 
@@ -62,7 +63,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeCursorAcpRuntime({
         cursorSettings,
-        environment: resolvedEnvironment,
+        environment: extendAcpSpawnEnvironment(resolvedEnvironment),
         childProcessSpawner: commandSpawner,
         cwd,
         clientInfo: { name: "t3-code-git-text", version: "0.0.0" },

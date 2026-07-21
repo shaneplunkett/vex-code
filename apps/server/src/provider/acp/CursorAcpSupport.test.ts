@@ -3,6 +3,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { applyCursorAcpModelSelection, buildCursorAcpSpawnInput } from "./CursorAcpSupport.ts";
+import { replaceAcpSpawnEnvironment } from "./AcpSessionRuntime.ts";
 
 const parameterizedGpt54ConfigOptions: ReadonlyArray<EffectAcpSchema.SessionConfigOption> = [
   {
@@ -72,6 +73,21 @@ describe("buildCursorAcpSpawnInput", () => {
       command: "/usr/local/bin/agent",
       args: ["-e", "http://localhost:3000", "acp"],
       cwd: "/tmp/project",
+    });
+  });
+
+  it("marks a resolved workspace environment as complete", () => {
+    expect(
+      buildCursorAcpSpawnInput(
+        undefined,
+        "/tmp/project",
+        replaceAcpSpawnEnvironment({ KEEP: "yes" }),
+      ),
+    ).toEqual({
+      command: "agent",
+      args: ["acp"],
+      cwd: "/tmp/project",
+      environment: { values: { KEEP: "yes" }, mode: "replace" },
     });
   });
 });

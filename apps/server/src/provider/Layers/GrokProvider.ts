@@ -16,6 +16,7 @@ import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import { extendAcpSpawnEnvironment } from "../acp/AcpSessionRuntime.ts";
 
 import {
   buildServerProvider,
@@ -137,7 +138,7 @@ const discoverGrokModelsViaAcp = (
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const acp = yield* makeGrokAcpRuntime({
       grokSettings,
-      environment,
+      environment: extendAcpSpawnEnvironment(environment),
       childProcessSpawner,
       cwd: process.cwd(),
       clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },

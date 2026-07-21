@@ -20,7 +20,7 @@ export interface CursorAcpRuntimeInput extends Omit<
 > {
   readonly childProcessSpawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
   readonly cursorSettings: CursorAcpRuntimeCursorSettings | null | undefined;
-  readonly environment?: NodeJS.ProcessEnv;
+  readonly environment?: AcpSessionRuntime.AcpSpawnEnvironment;
 }
 
 export interface CursorAcpModelSelectionErrorContext {
@@ -32,7 +32,7 @@ export interface CursorAcpModelSelectionErrorContext {
 export function buildCursorAcpSpawnInput(
   cursorSettings: CursorAcpRuntimeCursorSettings | null | undefined,
   cwd: string,
-  environment?: NodeJS.ProcessEnv,
+  environment?: AcpSessionRuntime.AcpSpawnEnvironment,
 ): AcpSessionRuntime.AcpSpawnInput {
   return {
     command: cursorSettings?.binaryPath || "agent",
@@ -41,7 +41,7 @@ export function buildCursorAcpSpawnInput(
       "acp",
     ],
     cwd,
-    ...(environment ? { env: environment } : {}),
+    ...(environment ? { environment } : {}),
   };
 }
 
