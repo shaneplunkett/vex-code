@@ -13,6 +13,7 @@
  */
 import type {
   ProviderInterruptTurnInput,
+  OrchestrationGetMcpStatusResult,
   ProviderInstanceId,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -96,6 +97,14 @@ export interface ProviderServiceShape {
   readonly getInstanceInfo: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
+
+  /**
+   * Read MCP connection health for a thread without starting or recovering its
+   * provider process merely to populate UI diagnostics.
+   */
+  readonly getMcpStatus: (
+    threadId: ThreadId,
+  ) => Effect.Effect<OrchestrationGetMcpStatusResult, ProviderServiceError>;
 
   /**
    * Roll back provider conversation state by a number of turns.

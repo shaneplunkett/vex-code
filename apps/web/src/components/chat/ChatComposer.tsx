@@ -26,6 +26,7 @@ import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import {
   memo,
+  type ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -71,6 +72,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { McpStatusControl } from "./McpStatusControl";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -191,6 +193,7 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
 }
 
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
+  mcpControl?: ReactNode;
   showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
@@ -290,6 +293,13 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
         </Select>
         <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
       </Tooltip>
+
+      {props.mcpControl ? (
+        <>
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          {props.mcpControl}
+        </>
+      ) : null}
 
       {interactionModeToggle}
 
@@ -2494,18 +2504,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 />
 
                 {isComposerFooterCompact ? (
-                  <CompactComposerControlsMenu
-                    activePlan={showPlanSidebarToggle}
-                    interactionMode={interactionMode}
-                    planSidebarLabel={planSidebarLabel}
-                    planSidebarOpen={planSidebarOpen}
-                    runtimeMode={runtimeMode}
-                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                    traitsMenuContent={providerTraitsMenuContent}
-                    onToggleInteractionMode={toggleInteractionMode}
-                    onTogglePlanSidebar={togglePlanSidebar}
-                    onRuntimeModeChange={handleRuntimeModeChange}
-                  />
+                  <>
+                    {selectedProvider === "codex" || selectedProvider === "claudeAgent" ? (
+                      <McpStatusControl
+                        compact
+                        environmentId={environmentId}
+                        threadId={activeThreadId}
+                        provider={selectedProvider}
+                      />
+                    ) : null}
+                    <CompactComposerControlsMenu
+                      activePlan={showPlanSidebarToggle}
+                      interactionMode={interactionMode}
+                      planSidebarLabel={planSidebarLabel}
+                      planSidebarOpen={planSidebarOpen}
+                      runtimeMode={runtimeMode}
+                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                      traitsMenuContent={providerTraitsMenuContent}
+                      onToggleInteractionMode={toggleInteractionMode}
+                      onTogglePlanSidebar={togglePlanSidebar}
+                      onRuntimeModeChange={handleRuntimeModeChange}
+                    />
+                  </>
                 ) : (
                   <>
                     {providerTraitsPicker ? (
@@ -2515,6 +2535,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       </>
                     ) : null}
                     <ComposerFooterModeControls
+                      mcpControl={
+                        selectedProvider === "codex" || selectedProvider === "claudeAgent" ? (
+                          <McpStatusControl
+                            compact={false}
+                            environmentId={environmentId}
+                            threadId={activeThreadId}
+                            provider={selectedProvider}
+                          />
+                        ) : undefined
+                      }
                       showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
                       interactionMode={interactionMode}
                       runtimeMode={runtimeMode}

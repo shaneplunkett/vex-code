@@ -8,6 +8,7 @@ import {
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderInteractionMode,
+  type ProviderMcpServerStatus,
   type ProviderRequestKind,
   type ProviderSession,
   type ProviderTurnStartResult,
@@ -139,6 +140,10 @@ export interface CodexSessionRuntimeShape {
   ) => Effect.Effect<ProviderTurnStartResult, CodexSessionRuntimeError>;
   readonly interruptTurn: (turnId?: TurnId) => Effect.Effect<void, CodexSessionRuntimeError>;
   readonly readThread: Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  readonly getMcpStatus: Effect.Effect<
+    ReadonlyArray<ProviderMcpServerStatus>,
+    CodexSessionRuntimeError
+  >;
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
@@ -753,6 +758,15 @@ export const makeCodexSessionRuntime = (
       Effect.provide(clientContext),
     );
     const serverNotifications = yield* Queue.unbounded<CodexServerNotification>();
+    const mcpStartupStatusRef = yield* Ref.make(
+      new Map<
+        string,
+        {
+          readonly status: EffectCodexSchema.V2McpServerStatusUpdatedNotification__McpServerStartupState;
+          readonly error?: string;
+        }
+      >(),
+    );
     const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
     const randomUUIDv4 = (purpose: CodexErrors.CodexAppServerIdentifierPurpose) =>
       crypto.randomUUIDv4.pipe(
@@ -826,6 +840,17 @@ export const makeCodexSessionRuntime = (
 
     const handleRawNotification = (notification: CodexServerNotification) =>
       Effect.gen(function* () {
+        if (notification.method === "mcpServer/startupStatus/updated") {
+          const error = notification.params.error?.trim();
+          yield* Ref.update(mcpStartupStatusRef, (current) => {
+            const next = new Map(current);
+            next.set(notification.params.name, {
+              status: notification.params.status,
+              ...(error ? { error } : {}),
+            });
+            return next;
+          });
+        }
         const payload = notification.params;
         const route = readRouteFields(notification);
         const collabReceiverTurns = yield* Ref.get(collabReceiverTurnsRef);
@@ -1332,6 +1357,49 @@ export const makeCodexSessionRuntime = (
           includeTurns: true,
         });
         return parseThreadSnapshot(response);
+      }),
+      getMcpStatus: Effect.gen(function* () {
+        const providerThreadId = yield* readProviderThreadId;
+        const response = yield* client.request("mcpServerStatus/list", {
+          threadId: providerThreadId,
+          detail: "toolsAndAuthOnly",
+        });
+        const startupStatuses = yield* Ref.get(mcpStartupStatusRef);
+        return response.data.map((server): ProviderMcpServerStatus => {
+          const startup = startupStatuses.get(server.name);
+          const status: ProviderMcpServerStatus["status"] =
+            server.authStatus === "notLoggedIn"
+              ? "needs-auth"
+              : startup?.status === "starting"
+                ? "connecting"
+                : startup?.status === "failed" || startup?.status === "cancelled"
+                  ? "failed"
+                  : "connected";
+          const error =
+            startup?.error ??
+            (startup?.status === "cancelled" ? "MCP server connection was cancelled." : undefined);
+          const tools = Object.values(server.tools).map((tool) => {
+            const description = tool.description?.trim();
+            return {
+              name: tool.name,
+              ...(description ? { description } : {}),
+            };
+          });
+          return {
+            name: server.name,
+            status,
+            ...(error ? { error } : {}),
+            ...(server.serverInfo
+              ? {
+                  serverInfo: {
+                    name: server.serverInfo.name,
+                    version: server.serverInfo.version,
+                  },
+                }
+              : {}),
+            tools,
+          };
+        });
       }),
       rollbackThread: (numTurns) =>
         Effect.gen(function* () {

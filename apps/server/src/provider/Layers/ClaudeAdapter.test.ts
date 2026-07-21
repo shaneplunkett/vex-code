@@ -8,6 +8,7 @@ import type {
   Options as ClaudeQueryOptions,
   PermissionMode,
   PermissionResult,
+  McpServerStatus,
   SDKMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -60,6 +61,7 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   public readonly setPermissionModeCalls: Array<string> = [];
   public readonly setMaxThinkingTokensCalls: Array<number | null> = [];
   public closeCalls = 0;
+  public mcpStatuses: McpServerStatus[] = [];
 
   emit(message: SDKMessage): void {
     if (this.done) {
@@ -110,6 +112,8 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   readonly setMaxThinkingTokens = async (maxThinkingTokens: number | null): Promise<void> => {
     this.setMaxThinkingTokensCalls.push(maxThinkingTokens);
   };
+
+  readonly mcpServerStatus = async (): Promise<McpServerStatus[]> => this.mcpStatuses;
 
   readonly close = (): void => {
     this.closeCalls += 1;
@@ -299,6 +303,48 @@ describe("ClaudeAdapterLive", () => {
         PATH: "/workspace/bin",
         DIRENV_MARKER: cwd,
       });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("normalizes Claude MCP connection status for the provider facade", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      harness.query.mcpStatuses = [
+        {
+          name: "docs",
+          status: "connected",
+          scope: " project ",
+          serverInfo: { name: "docs-server", version: "1.2.3" },
+          tools: [{ name: "search", description: " Search docs " }],
+        },
+        { name: "browser", status: "pending" },
+        { name: "github", status: "failed", error: " Connection refused " },
+        { name: "slack", status: "needs-auth" },
+      ];
+
+      const statuses = yield* adapter.getMcpStatus!(THREAD_ID);
+
+      assert.deepEqual(statuses, [
+        {
+          name: "docs",
+          status: "connected",
+          scope: "project",
+          serverInfo: { name: "docs-server", version: "1.2.3" },
+          tools: [{ name: "search", description: "Search docs" }],
+        },
+        { name: "browser", status: "connecting", tools: [] },
+        { name: "github", status: "failed", error: "Connection refused", tools: [] },
+        { name: "slack", status: "needs-auth", tools: [] },
+      ]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

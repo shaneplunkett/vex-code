@@ -122,6 +122,12 @@ function createProviderServiceHarness(
           continuationKey: `${providerName}:instance:${instanceId}`,
         },
       }),
+    getMcpStatus: () =>
+      Effect.succeed({
+        availability: "inactive",
+        servers: [],
+        checkedAt: now,
+      }),
     rollbackConversation,
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);
