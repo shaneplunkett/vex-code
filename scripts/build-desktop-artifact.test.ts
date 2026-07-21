@@ -465,11 +465,35 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       const mac = config.mac as Record<string, unknown>;
       assert.equal(config.appId, "com.t3tools.t3code");
+      assert.equal(config.productName, "Vex Code (Alpha)");
+      assert.equal(mac.icon, "icon.icns");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.deepStrictEqual(mac.protocols, [
         { name: "Vex Code", schemes: ["t3code", "t3code-dev"] },
       ]);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("brands the Linux launcher while preserving compatibility identifiers", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      const linux = config.linux as Record<string, unknown>;
+      const desktop = linux.desktop as { readonly entry: Record<string, unknown> };
+      assert.equal(config.productName, "Vex Code (Alpha)");
+      assert.equal(linux.icon, "icons");
+      assert.equal(linux.executableName, "t3code");
+      assert.equal(desktop.entry.Name, "Vex Code (Alpha)");
+      assert.equal(desktop.entry.StartupWMClass, "t3code");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
