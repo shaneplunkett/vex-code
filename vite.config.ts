@@ -11,6 +11,7 @@ export default defineConfig({
   test: {
     environment: "node",
     exclude: [
+      "**/.direnv/**",
       "**/.repos/**",
       "**/node_modules/**",
       "**/dist/**",

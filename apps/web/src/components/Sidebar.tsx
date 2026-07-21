@@ -78,7 +78,7 @@ import { APP_STAGE_LABEL } from "../branding";
 import { VexSidebarWordmark } from "../vex/VexSidebarWordmark";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { isMacPlatform } from "../lib/utils";
+import { cn, isMacPlatform } from "../lib/utils";
 import {
   readThreadShell,
   useProject,
@@ -127,6 +127,7 @@ import {
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
+import { SidebarStageBackdrop, resolveSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { Kbd } from "./ui/kbd";
 import {
   getArm64IntelBuildWarningDescription,
@@ -185,6 +186,8 @@ import {
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import {
+  archiveSelectedThreadEntries,
+  buildMultiSelectThreadContextMenuItems,
   getSidebarThreadIdsToPrewarm,
   resolveAdjacentThreadId,
   isContextMenuPointerDown,
@@ -772,7 +775,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   />
                 }
               >
-                <TerminalIcon className={`size-3 ${terminalStatus.pulse ? "animate-pulse" : ""}`} />
+                <TerminalIcon
+                  className={`size-3 ${terminalStatus.pulse ? "animate-status-pulse" : ""}`}
+                />
               </TooltipTrigger>
               <TooltipPopup side="top">{terminalStatus.label}</TooltipPopup>
             </Tooltip>
@@ -1773,21 +1778,66 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const threadKeys = [...useThreadSelectionStore.getState().selectedThreadKeys];
       if (threadKeys.length === 0) return;
       const count = threadKeys.length;
+      const selectedThreadEntries = threadKeys.flatMap((threadKey) => {
+        const threadRef = parseScopedThreadKey(threadKey);
+        const thread = threadRef ? readThreadShell(threadRef) : null;
+        return threadRef && thread ? [{ threadKey, threadRef, thread }] : [];
+      });
+      const hasRunningThread = selectedThreadEntries.some(
+        ({ thread }) => thread.session?.status === "running" && thread.session.activeTurnId != null,
+      );
 
       const clicked = await api.contextMenu.show(
-        [
-          { id: "mark-unread", label: `Mark unread (${count})` },
-          { id: "delete", label: `Delete (${count})`, destructive: true },
-        ],
+        buildMultiSelectThreadContextMenuItems({ count, hasRunningThread }),
         position,
       );
 
       if (clicked === "mark-unread") {
-        for (const threadKey of threadKeys) {
-          const thread = sidebarThreadByKeyRef.current.get(threadKey);
-          markThreadUnread(threadKey, thread?.latestTurn?.completedAt);
+        for (const { threadKey, thread } of selectedThreadEntries) {
+          markThreadUnread(threadKey, thread.latestTurn?.completedAt);
         }
         clearSelection();
+        return;
+      }
+
+      if (clicked === "archive") {
+        if (appSettingsConfirmThreadArchive) {
+          const confirmed = await api.dialogs.confirm(
+            `Archive ${count} thread${count === 1 ? "" : "s"}?`,
+          );
+          if (!confirmed) return;
+        }
+
+        const archiveOutcome = await archiveSelectedThreadEntries({
+          entries: selectedThreadEntries,
+          archive: ({ threadRef }, onArchived) => archiveThread(threadRef, { onArchived }),
+        });
+        for (const failure of archiveOutcome.followupFailures) {
+          if (isAtomCommandInterrupted(failure)) continue;
+          const error = squashAtomCommandFailure(failure);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Thread archived, but navigation failed",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+        if (archiveOutcome.mutationFailure) {
+          removeFromSelection(archiveOutcome.archivedThreadKeys);
+          if (!isAtomCommandInterrupted(archiveOutcome.mutationFailure)) {
+            const error = squashAtomCommandFailure(archiveOutcome.mutationFailure);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to archive threads",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+        removeFromSelection(threadKeys);
         return;
       }
 
@@ -1804,10 +1854,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       }
 
       const deletedThreadKeys = new Set(threadKeys);
-      for (const threadKey of threadKeys) {
-        const thread = sidebarThreadByKeyRef.current.get(threadKey);
-        if (!thread) continue;
-        const result = await deleteThread(scopeThreadRef(thread.environmentId, thread.id), {
+      for (const { threadRef } of selectedThreadEntries) {
+        const result = await deleteThread(threadRef, {
           deletedThreadKeys,
         });
         if (result._tag === "Failure") {
@@ -1827,7 +1875,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       removeFromSelection(threadKeys);
     },
     [
+      appSettingsConfirmThreadArchive,
       appSettingsConfirmThreadDelete,
+      archiveThread,
       clearSelection,
       deleteThread,
       markThreadUnread,
@@ -2227,7 +2277,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                   <span
                     className={`size-[9px] rounded-full ${projectStatus.dotClass} ${
-                      projectStatus.pulse ? "animate-pulse" : ""
+                      projectStatus.pulse ? "animate-status-pulse" : ""
                     }`}
                   />
                 </span>
@@ -2743,32 +2793,39 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
 }: {
   isElectron: boolean;
 }) {
-  return isElectron ? (
-    <SidebarHeader className="@container/sidebar-header drag-region h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0">
-      <SidebarTrigger className="md:hidden" />
-      <SidebarBrand />
-    </SidebarHeader>
-  ) : (
-    <SidebarHeader className="@container/sidebar-header h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0">
-      <SidebarTrigger className="md:hidden" />
-      <SidebarBrand />
+  const stageLabel = useSidebarStageLabel();
+  const backdropVariant = resolveSidebarStageBackdropVariant(stageLabel);
+
+  return (
+    <SidebarHeader
+      className={cn(
+        "@container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        isElectron && "drag-region",
+      )}
+    >
+      {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
+      <SidebarTrigger
+        className={cn(
+          "relative z-10 md:hidden",
+          backdropVariant && "hover:bg-white/15 [&_svg]:text-white/85! [&_svg]:hover:text-white!",
+        )}
+      />
+      <SidebarBrand onBackdrop={backdropVariant !== null} />
     </SidebarHeader>
   );
 });
 
-function SidebarBrand() {
-  const stageLabel = useSidebarStageLabel();
-
+function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <Link
       aria-label="Go to threads"
-      className="sidebar-brand ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2"
+      className={cn(
+        "sidebar-brand relative z-10 ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        onBackdrop ? "text-white" : "text-foreground",
+      )}
       to="/"
     >
-      <VexSidebarWordmark />
-      <span className="sidebar-brand-stage shrink-0 items-center whitespace-nowrap rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
-        {stageLabel}
-      </span>
+      <VexSidebarWordmark onBackdrop={onBackdrop} />
     </Link>
   );
 }
@@ -3163,8 +3220,9 @@ export default function Sidebar() {
     return buildPhysicalToLogicalProjectKeyMap({
       projects: orderedProjects,
       settings: projectGroupingSettings,
+      primaryEnvironmentId,
     });
-  }, [orderedProjects, projectGroupingSettings]);
+  }, [orderedProjects, projectGroupingSettings, primaryEnvironmentId]);
   const projectPhysicalKeyByScopedRef = useMemo(
     () =>
       new Map(

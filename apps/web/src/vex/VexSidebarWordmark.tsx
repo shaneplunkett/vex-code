@@ -1,6 +1,6 @@
 import { VEX_APP_BASE_NAME, VEX_APP_ICON_PATH } from "./branding";
 
-export function VexSidebarWordmark() {
+export function VexSidebarWordmark({ onBackdrop = false }: { onBackdrop?: boolean }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1" aria-label={VEX_APP_BASE_NAME}>
       <img
@@ -9,8 +9,14 @@ export function VexSidebarWordmark() {
         className="size-4 shrink-0 rounded-[4px]"
         src={VEX_APP_ICON_PATH}
       />
-      <span className="truncate text-sm font-semibold tracking-tight text-foreground">Vex</span>
-      <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
+      <span
+        className={`truncate text-sm font-semibold tracking-tight ${onBackdrop ? "text-white" : "text-foreground"}`}
+      >
+        Vex
+      </span>
+      <span
+        className={`truncate text-sm font-medium tracking-tight ${onBackdrop ? "text-white/70" : "text-muted-foreground"}`}
+      >
         Code
       </span>
     </span>
