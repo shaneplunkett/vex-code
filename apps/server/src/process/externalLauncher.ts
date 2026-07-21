@@ -335,6 +335,10 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
     return yield* new ExternalLauncherUnknownEditorError({ editor: input.editor });
   }
 
+  if ("launchMode" in editorDef && editorDef.launchMode === "terminal") {
+    return yield* new ExternalLauncherUnsupportedEditorError({ editor: input.editor });
+  }
+
   if (editorDef.commands) {
     const command = Option.getOrElse(
       yield* resolveAvailableCommand(editorDef.commands, env),

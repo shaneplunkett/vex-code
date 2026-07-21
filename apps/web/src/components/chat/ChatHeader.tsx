@@ -38,6 +38,7 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  onOpenInTerminalEditor: (editor: EditorId, cwd: string) => unknown;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -69,6 +70,7 @@ export const ChatHeader = memo(function ChatHeader({
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onOpenInTerminalEditor,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const showOpenInPicker = shouldShowOpenInPicker({
@@ -117,6 +119,7 @@ export const ChatHeader = memo(function ChatHeader({
             keybindings={keybindings}
             availableEditors={availableEditors}
             openInCwd={openInCwd}
+            onOpenInTerminalEditor={onOpenInTerminalEditor}
           />
         )}
         {activeProjectName && (

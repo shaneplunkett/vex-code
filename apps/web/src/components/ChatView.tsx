@@ -2,6 +2,7 @@ import {
   type ApprovalRequestId,
   DEFAULT_MODEL,
   defaultInstanceIdForDriver,
+  type EditorId,
   type EnvironmentId,
   type MessageId,
   type ModelSelection,
@@ -65,6 +66,7 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { launchTerminalEditor } from "../editorLaunch";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -2833,6 +2835,44 @@ function ChatViewContent(props: ChatViewProps) {
     openTerminal,
     panelTerminalIds,
   ]);
+  const openInTerminalEditor = useCallback(
+    (editor: EditorId, cwd: string) => {
+      if (!activeThreadRef || !activeThreadId || !activeProject) return;
+      const terminalId = nextTerminalId([...activeKnownTerminalIds, ...panelTerminalIds]);
+      useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
+      setTerminalFocusRequestId((value) => value + 1);
+
+      return launchTerminalEditor(
+        {
+          editor,
+          threadId: activeThreadId,
+          terminalId,
+          cwd,
+          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
+          env: projectScriptRuntimeEnv({
+            project: { cwd: activeProject.workspaceRoot },
+            worktreePath: activeThreadWorktreePath,
+          }),
+        },
+        {
+          openTerminal: (input) =>
+            openTerminal({ environmentId: activeThreadRef.environmentId, input }),
+          writeTerminal: (input) =>
+            writeTerminal({ environmentId: activeThreadRef.environmentId, input }),
+        },
+      );
+    },
+    [
+      activeKnownTerminalIds,
+      activeProject,
+      activeThreadId,
+      activeThreadRef,
+      activeThreadWorktreePath,
+      openTerminal,
+      panelTerminalIds,
+      writeTerminal,
+    ],
+  );
   const splitPanelTerminal = useCallback(
     (direction: "horizontal" | "vertical" = "horizontal") => {
       if (
@@ -5053,6 +5093,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
             onDeleteProjectScript={deleteProjectScript}
+            onOpenInTerminalEditor={openInTerminalEditor}
           />
         </header>
 

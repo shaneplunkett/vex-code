@@ -10,6 +10,7 @@ type EditorDefinition = {
   readonly commands: readonly [string, ...string[]] | null;
   readonly baseArgs?: readonly string[];
   readonly launchStyle: EditorLaunchStyle;
+  readonly launchMode?: "external" | "terminal";
 };
 
 export const EDITORS = [
@@ -25,6 +26,13 @@ export const EDITORS = [
   },
   { id: "vscodium", label: "VSCodium", commands: ["codium"], launchStyle: "goto" },
   { id: "zed", label: "Zed", commands: ["zed", "zeditor"], launchStyle: "direct-path" },
+  {
+    id: "neovim",
+    label: "Neovim",
+    commands: ["nvim"],
+    launchStyle: "direct-path",
+    launchMode: "terminal",
+  },
   { id: "antigravity", label: "Antigravity", commands: ["agy"], launchStyle: "goto" },
   { id: "idea", label: "IntelliJ IDEA", commands: ["idea"], launchStyle: "line-column" },
   { id: "aqua", label: "Aqua", commands: ["aqua"], launchStyle: "line-column" },
