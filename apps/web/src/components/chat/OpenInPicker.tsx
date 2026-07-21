@@ -2,7 +2,7 @@ import { EditorId, type EnvironmentId, type ResolvedKeybindingsConfig } from "@t
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { isOpenFavoriteEditorShortcut, shortcutLabelForCommand } from "../../keybindings";
 import { usePreferredEditor } from "../../editorPreferences";
-import { ChevronDownIcon, FolderClosedIcon } from "lucide-react";
+import { ChevronDownIcon, FolderClosedIcon, TerminalSquare } from "lucide-react";
 import { Button } from "../ui/button";
 import { Group, GroupSeparator } from "../ui/group";
 import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "../ui/menu";
@@ -34,8 +34,13 @@ import {
 import { isMacPlatform, isWindowsPlatform } from "~/lib/utils";
 import { shellEnvironment } from "~/state/shell";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { isTerminalBackedEditor } from "~/editorLaunch";
 
-const resolveOptions = (platform: string, availableEditors: ReadonlyArray<EditorId>) => {
+export const resolveOpenInOptions = (
+  platform: string,
+  availableEditors: ReadonlyArray<EditorId>,
+  supportsTerminalEditors: boolean,
+) => {
   const baseOptions: ReadonlyArray<{ label: string; Icon: Icon; value: EditorId }> = [
     {
       label: "Cursor",
@@ -71,6 +76,11 @@ const resolveOptions = (platform: string, availableEditors: ReadonlyArray<Editor
       label: "Zed",
       Icon: Zed,
       value: "zed",
+    },
+    {
+      label: "Neovim",
+      Icon: TerminalSquare,
+      value: "neovim",
     },
     {
       label: "Antigravity",
@@ -148,7 +158,11 @@ const resolveOptions = (platform: string, availableEditors: ReadonlyArray<Editor
     },
   ];
   const availableEditorSet = new Set(availableEditors);
-  return baseOptions.filter((option) => availableEditorSet.has(option.value));
+  return baseOptions.filter(
+    (option) =>
+      availableEditorSet.has(option.value) &&
+      (supportsTerminalEditors || !isTerminalBackedEditor(option.value)),
+  );
 };
 
 export const OpenInPicker = memo(function OpenInPicker({
@@ -158,6 +172,7 @@ export const OpenInPicker = memo(function OpenInPicker({
   openInCwd,
   compact = false,
   enableShortcut = true,
+  onOpenInTerminalEditor,
 }: {
   environmentId: EnvironmentId;
   keybindings: ResolvedKeybindingsConfig;
@@ -165,13 +180,16 @@ export const OpenInPicker = memo(function OpenInPicker({
   openInCwd: string | null;
   compact?: boolean;
   enableShortcut?: boolean;
+  onOpenInTerminalEditor?: (editor: EditorId, cwd: string) => unknown;
 }) {
   const openInEditorMutation = useAtomCommand(shellEnvironment.openInEditor, "open in editor");
-  const [preferredEditor, setPreferredEditor] = usePreferredEditor(availableEditors);
   const options = useMemo(
-    () => resolveOptions(navigator.platform, availableEditors),
-    [availableEditors],
+    () =>
+      resolveOpenInOptions(navigator.platform, availableEditors, Boolean(onOpenInTerminalEditor)),
+    [availableEditors, onOpenInTerminalEditor],
   );
+  const supportedEditors = useMemo(() => options.map(({ value }) => value), [options]);
+  const [preferredEditor, setPreferredEditor] = usePreferredEditor(supportedEditors);
   const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
 
   const openInEditor = useCallback(
@@ -179,17 +197,26 @@ export const OpenInPicker = memo(function OpenInPicker({
       if (!openInCwd) return;
       const editor = editorId ?? preferredEditor;
       if (!editor) return;
-      const result = openInEditorMutation({
-        environmentId,
-        input: {
-          cwd: openInCwd,
-          editor,
-        },
-      });
+      const result = isTerminalBackedEditor(editor)
+        ? onOpenInTerminalEditor?.(editor, openInCwd)
+        : openInEditorMutation({
+            environmentId,
+            input: {
+              cwd: openInCwd,
+              editor,
+            },
+          });
       setPreferredEditor(editor);
       return result;
     },
-    [environmentId, openInCwd, openInEditorMutation, preferredEditor, setPreferredEditor],
+    [
+      environmentId,
+      onOpenInTerminalEditor,
+      openInCwd,
+      openInEditorMutation,
+      preferredEditor,
+      setPreferredEditor,
+    ],
   );
 
   const openFavoriteEditorShortcutLabel = useMemo(
@@ -205,24 +232,11 @@ export const OpenInPicker = memo(function OpenInPicker({
       if (!preferredEditor) return;
 
       e.preventDefault();
-      void openInEditorMutation({
-        environmentId,
-        input: {
-          cwd: openInCwd,
-          editor: preferredEditor,
-        },
-      });
+      void openInEditor(preferredEditor);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [
-    enableShortcut,
-    environmentId,
-    keybindings,
-    openInCwd,
-    openInEditorMutation,
-    preferredEditor,
-  ]);
+  }, [enableShortcut, environmentId, keybindings, openInCwd, openInEditor, preferredEditor]);
 
   return (
     <Group aria-label="Open in editor">

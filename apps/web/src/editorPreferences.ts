@@ -11,8 +11,30 @@ import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "./hoo
 import { useCallback, useMemo } from "react";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
+import { isTerminalBackedEditor } from "./editorLaunch";
 
 const LAST_EDITOR_KEY = "t3code:last-editor";
+
+export function resolvePickerPreferredEditor(
+  availableEditors: ReadonlyArray<EditorId>,
+  lastEditor: EditorId | null,
+): EditorId | null {
+  if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
+  if (availableEditors.includes("file-manager")) return "file-manager";
+  return availableEditors.length === 1 ? (availableEditors[0] ?? null) : null;
+}
+
+export function resolveExternalPreferredEditor(
+  availableEditors: ReadonlyArray<EditorId>,
+  lastEditor: EditorId | null,
+): EditorId | null {
+  const externalEditors = new Set(
+    availableEditors.filter((editor) => !isTerminalBackedEditor(editor)),
+  );
+  if (lastEditor && externalEditors.has(lastEditor)) return lastEditor;
+  if (externalEditors.has("file-manager")) return "file-manager";
+  return EDITORS.find((editor) => externalEditors.has(editor.id))?.id ?? null;
+}
 
 export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
@@ -41,10 +63,10 @@ export class PreferredEditorUnavailableError extends Schema.TaggedErrorClass<Pre
 export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
   const [lastEditor, setLastEditor] = useLocalStorage(LAST_EDITOR_KEY, null, EditorId);
 
-  const effectiveEditor = useMemo(() => {
-    if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
-    return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
-  }, [lastEditor, availableEditors]);
+  const effectiveEditor = useMemo(
+    () => resolvePickerPreferredEditor(availableEditors, lastEditor),
+    [lastEditor, availableEditors],
+  );
 
   return [effectiveEditor, setLastEditor] as const;
 }
@@ -54,9 +76,13 @@ export function resolveAndPersistPreferredEditor(
 ): EditorId | null {
   const availableEditorIds = new Set(availableEditors);
   const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
-  if (stored && availableEditorIds.has(stored)) return stored;
-  const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;
-  if (editor) setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
+  const editor = resolveExternalPreferredEditor(availableEditors, stored);
+  const storedTerminalEditorIsAvailable = Boolean(
+    stored && availableEditorIds.has(stored) && isTerminalBackedEditor(stored),
+  );
+  if (editor && !storedTerminalEditorIsAvailable) {
+    setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
+  }
   return editor ?? null;
 }
 
