@@ -25,27 +25,32 @@ interface GrokAcpRuntimeInput extends Omit<
 > {
   readonly childProcessSpawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
   readonly grokSettings: GrokAcpRuntimeGrokSettings | null | undefined;
-  readonly environment?: NodeJS.ProcessEnv;
+  readonly environment?: AcpSessionRuntime.AcpSpawnEnvironment;
 }
 
 export function buildGrokAcpSpawnInput(
   grokSettings: GrokAcpRuntimeGrokSettings | null | undefined,
   cwd: string,
-  environment?: NodeJS.ProcessEnv,
+  environment?: AcpSessionRuntime.AcpSpawnEnvironment,
 ): AcpSessionRuntime.AcpSpawnInput {
   return {
     command: grokSettings?.binaryPath || "grok",
     args: ["agent", "stdio"],
     cwd,
-    env: {
-      ...environment,
-      [GROK_OAUTH2_REFERRER_ENV]: T3_CODE_OAUTH_REFERRER,
+    environment: {
+      values: {
+        ...environment?.values,
+        [GROK_OAUTH2_REFERRER_ENV]: T3_CODE_OAUTH_REFERRER,
+      },
+      mode: environment?.mode ?? "extend",
     },
   };
 }
 
-function resolveGrokAuthMethodId(environment: NodeJS.ProcessEnv | undefined): string {
-  return environment?.[GROK_API_KEY_ENV]?.trim()
+function resolveGrokAuthMethodId(
+  environment: AcpSessionRuntime.AcpSpawnEnvironment | undefined,
+): string {
+  return environment?.values[GROK_API_KEY_ENV]?.trim()
     ? GROK_AUTH_METHOD_API_KEY
     : GROK_AUTH_METHOD_CACHED_TOKEN;
 }

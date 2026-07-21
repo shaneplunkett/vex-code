@@ -7,6 +7,7 @@ import {
   buildGrokAcpSpawnInput,
   resolveGrokAcpBaseModelId,
 } from "./GrokAcpSupport.ts";
+import { extendAcpSpawnEnvironment, replaceAcpSpawnEnvironment } from "./AcpSessionRuntime.ts";
 
 describe("resolveGrokAcpBaseModelId", () => {
   it("normalizes empty and custom Grok model ids", () => {
@@ -18,18 +19,46 @@ describe("resolveGrokAcpBaseModelId", () => {
 
 describe("buildGrokAcpSpawnInput", () => {
   it("passes the T3 Code referrer through Grok OAuth env", () => {
-    const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
-      XAI_API_KEY: "secret",
-      GROK_OAUTH2_REFERRER: "other-client",
-    });
+    const spawn = buildGrokAcpSpawnInput(
+      { binaryPath: "/usr/local/bin/grok" },
+      "/tmp/project",
+      extendAcpSpawnEnvironment({
+        XAI_API_KEY: "secret",
+        GROK_OAUTH2_REFERRER: "other-client",
+      }),
+    );
 
     expect(spawn).toEqual({
       command: "/usr/local/bin/grok",
       args: ["agent", "stdio"],
       cwd: "/tmp/project",
-      env: {
-        XAI_API_KEY: "secret",
-        GROK_OAUTH2_REFERRER: "t3code",
+      environment: {
+        values: {
+          XAI_API_KEY: "secret",
+          GROK_OAUTH2_REFERRER: "t3code",
+        },
+        mode: "extend",
+      },
+    });
+  });
+
+  it("marks a resolved workspace environment as complete", () => {
+    const spawn = buildGrokAcpSpawnInput(
+      { binaryPath: "/usr/local/bin/grok" },
+      "/tmp/project",
+      replaceAcpSpawnEnvironment({ KEEP: "yes" }),
+    );
+
+    expect(spawn).toEqual({
+      command: "/usr/local/bin/grok",
+      args: ["agent", "stdio"],
+      cwd: "/tmp/project",
+      environment: {
+        values: {
+          KEEP: "yes",
+          GROK_OAUTH2_REFERRER: "t3code",
+        },
+        mode: "replace",
       },
     });
   });

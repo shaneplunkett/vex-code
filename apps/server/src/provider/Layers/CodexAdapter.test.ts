@@ -36,9 +36,13 @@ import * as CodexErrors from "effect-codex-app-server/errors";
 
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { ProviderAdapterValidationError } from "../Errors.ts";
+import { ProviderAdapterProcessError, ProviderAdapterValidationError } from "../Errors.ts";
 import type { CodexAdapterShape } from "../Services/CodexAdapter.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
+import {
+  makeProviderSessionEnvironmentWithResolver,
+  WorkspaceEnvironmentError,
+} from "../WorkspaceEnvironment.ts";
 import {
   type CodexSessionRuntimeOptions,
   type CodexSessionRuntimeSendTurnInput,
@@ -47,6 +51,7 @@ import {
 } from "./CodexSessionRuntime.ts";
 import { makeCodexAdapter } from "./CodexAdapter.ts";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
+const isProviderAdapterProcessError = Schema.is(ProviderAdapterProcessError);
 
 // Test-local service tag so the rest of the file can keep using `yield* CodexAdapter`.
 class CodexAdapter extends Context.Service<CodexAdapter, CodexAdapterShape>()(
@@ -285,6 +290,167 @@ validationLayer("CodexAdapterLive validation", (it) => {
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });
+    }),
+  );
+});
+
+const workspaceEnvironmentRuntimeFactory = makeRuntimeFactory();
+const workspaceEnvironmentResolver = vi.fn((cwd: string) =>
+  Effect.succeed({
+    PATH: "/workspace/bin",
+    DIRENV_MARKER: cwd,
+  }),
+);
+const workspaceSessionEnvironment = makeProviderSessionEnvironmentWithResolver({
+  processEnvironment: { PATH: "/provider/bin" },
+  resolveWorkspaceEnvironment: workspaceEnvironmentResolver,
+});
+const workspaceEnvironmentLayer = it.layer(
+  Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      const codexConfig = decodeCodexSettings({});
+      return yield* makeCodexAdapter(codexConfig, {
+        makeRuntime: workspaceEnvironmentRuntimeFactory.factory,
+        sessionEnvironment: workspaceSessionEnvironment,
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  ),
+);
+
+workspaceEnvironmentLayer("CodexAdapterLive workspace environment", (it) => {
+  it.effect("passes the resolved workspace environment to the Codex runtime", () =>
+    Effect.gen(function* () {
+      workspaceEnvironmentResolver.mockClear();
+      workspaceEnvironmentRuntimeFactory.factory.mockClear();
+      const adapter = yield* CodexAdapter;
+      const cwd = "/tmp/direnv-codex-project";
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-direnv"),
+        cwd,
+        runtimeMode: "full-access",
+      });
+
+      NodeAssert.deepStrictEqual(workspaceEnvironmentResolver.mock.calls, [[cwd]]);
+      NodeAssert.deepStrictEqual(
+        workspaceEnvironmentRuntimeFactory.factory.mock.calls[0]?.[0].environment,
+        {
+          PATH: "/workspace/bin",
+          DIRENV_MARKER: cwd,
+        },
+      );
+    }),
+  );
+
+  it.effect("re-resolves the workspace environment when resuming a session", () =>
+    Effect.gen(function* () {
+      workspaceEnvironmentResolver.mockClear();
+      workspaceEnvironmentRuntimeFactory.factory.mockClear();
+      const adapter = yield* CodexAdapter;
+      const cwd = "/tmp/direnv-codex-resume";
+      const resumeCursor = { threadId: "provider-thread-direnv" };
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-direnv-resume"),
+        cwd,
+        resumeCursor,
+        runtimeMode: "full-access",
+      });
+
+      NodeAssert.deepStrictEqual(workspaceEnvironmentResolver.mock.calls, [[cwd]]);
+      NodeAssert.deepStrictEqual(
+        workspaceEnvironmentRuntimeFactory.factory.mock.calls[0]?.[0].environment,
+        {
+          PATH: "/workspace/bin",
+          DIRENV_MARKER: cwd,
+        },
+      );
+      NodeAssert.deepStrictEqual(
+        workspaceEnvironmentRuntimeFactory.factory.mock.calls[0]?.[0].resumeCursor,
+        resumeCursor,
+      );
+    }),
+  );
+});
+
+const replacementRuntimeFactory = makeRuntimeFactory();
+let replacementEnvironmentResolutionCount = 0;
+const replacementEnvironmentResolver = vi.fn((cwd: string) => {
+  replacementEnvironmentResolutionCount += 1;
+  return replacementEnvironmentResolutionCount === 1
+    ? Effect.succeed({ PATH: "/workspace/bin", DIRENV_MARKER: cwd })
+    : Effect.fail(
+        new WorkspaceEnvironmentError({
+          cwd,
+          detail: "replacement environment failed",
+        }),
+      );
+});
+const replacementSessionEnvironment = makeProviderSessionEnvironmentWithResolver({
+  processEnvironment: { PATH: "/provider/bin" },
+  resolveWorkspaceEnvironment: replacementEnvironmentResolver,
+});
+const replacementEnvironmentLayer = it.layer(
+  Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      const codexConfig = decodeCodexSettings({});
+      return yield* makeCodexAdapter(codexConfig, {
+        makeRuntime: replacementRuntimeFactory.factory,
+        sessionEnvironment: replacementSessionEnvironment,
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  ),
+);
+
+replacementEnvironmentLayer("CodexAdapterLive replacement environment", (it) => {
+  it.effect("keeps the existing session when replacement environment resolution fails", () =>
+    Effect.gen(function* () {
+      replacementEnvironmentResolutionCount = 0;
+      replacementEnvironmentResolver.mockClear();
+      replacementRuntimeFactory.factory.mockClear();
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("thread-direnv-replacement");
+      const cwd = "/tmp/direnv-codex-replacement";
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        cwd,
+        runtimeMode: "full-access",
+      });
+      const existingRuntime = replacementRuntimeFactory.lastRuntime;
+      NodeAssert.ok(existingRuntime);
+
+      const replacement = yield* adapter
+        .startSession({
+          provider: ProviderDriverKind.make("codex"),
+          threadId,
+          cwd,
+          runtimeMode: "full-access",
+        })
+        .pipe(Effect.result);
+
+      NodeAssert.equal(replacement._tag, "Failure");
+      if (replacement._tag === "Failure") {
+        NodeAssert.equal(isProviderAdapterProcessError(replacement.failure), true);
+      }
+      NodeAssert.equal(existingRuntime.closeImpl.mock.calls.length, 0);
+      NodeAssert.equal(yield* adapter.hasSession(threadId), true);
+      NodeAssert.equal(replacementRuntimeFactory.factory.mock.calls.length, 1);
     }),
   );
 });

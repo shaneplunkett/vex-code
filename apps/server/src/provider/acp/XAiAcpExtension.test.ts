@@ -26,7 +26,7 @@ const makePromptCompletionRuntime = (env: NodeJS.ProcessEnv) =>
       spawn: {
         command: process.execPath,
         args: [mockAgentPath],
-        env,
+        environment: AcpSessionRuntime.extendAcpSpawnEnvironment(env),
       },
       cwd: process.cwd(),
       clientInfo: { name: "t3-test", version: "0.0.0" },

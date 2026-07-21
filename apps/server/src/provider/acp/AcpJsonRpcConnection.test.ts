@@ -146,9 +146,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_EMIT_FOREIGN_SESSION_UPDATES: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           clientInfo: { name: "t3-test", version: "0.0.0" },
@@ -218,9 +218,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_HANG_FIRST_PROMPT_FOREVER: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           clientInfo: { name: "t3-test", version: "0.0.0" },
@@ -279,9 +279,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_EMIT_INTERLEAVED_ASSISTANT_TOOL_CALLS: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           clientInfo: { name: "t3-test", version: "0.0.0" },
@@ -317,9 +317,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_EMIT_GENERIC_TOOL_PLACEHOLDERS: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           clientInfo: { name: "t3-test", version: "0.0.0" },
@@ -478,9 +478,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_FAIL_LOAD_SESSION: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           resumeSessionId: "stale-session-id",
@@ -515,9 +515,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_EMIT_LOAD_REPLAY: "1",
-            },
+            }),
           },
           cwd: process.cwd(),
           resumeSessionId: "mock-session-1",
@@ -550,10 +550,10 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_HANG_LOAD_SESSION_AFTER_REPLAY: "1",
               T3_ACP_LOAD_SESSION_DELAY_MS: "10000",
-            },
+            }),
           },
           cwd: process.cwd(),
           resumeSessionId: "mock-session-1",
@@ -604,9 +604,9 @@ describe("AcpSessionRuntime", () => {
           spawn: {
             command: mockAgentCommand,
             args: mockAgentArgs,
-            env: {
+            environment: AcpSessionRuntime.extendAcpSpawnEnvironment({
               T3_ACP_REQUEST_LOG_PATH: requestLogPath,
-            },
+            }),
           },
           cwd: process.cwd(),
           clientInfo: { name: "t3-test", version: "0.0.0" },

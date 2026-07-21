@@ -416,7 +416,9 @@ const makeCursorAcpProbeRuntime = (
             "acp",
           ],
           cwd: process.cwd(),
-          ...(environment ? { env: environment } : {}),
+          ...(environment
+            ? { environment: AcpSessionRuntime.extendAcpSpawnEnvironment(environment) }
+            : {}),
         },
         cwd: process.cwd(),
         clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },

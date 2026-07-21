@@ -37,6 +37,10 @@ import {
 } from "../Errors.ts";
 import { type OpenCodeAdapterShape } from "../Services/OpenCodeAdapter.ts";
 import {
+  resolveProviderSessionEnvironment,
+  type ProviderSessionEnvironmentOptions,
+} from "../WorkspaceEnvironment.ts";
+import {
   buildOpenCodePermissionRules,
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -98,9 +102,8 @@ interface OpenCodeSessionContext {
   readonly sessionScope: Scope.Closeable;
 }
 
-export interface OpenCodeAdapterLiveOptions {
+export interface OpenCodeAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
   readonly instanceId?: ProviderInstanceId;
-  readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
 }
@@ -1031,6 +1034,17 @@ export function makeOpenCodeAdapter(
         const serverUrl = openCodeSettings.serverUrl;
         const serverPassword = openCodeSettings.serverPassword;
         const directory = input.cwd ?? serverConfig.cwd;
+        // A configured server is already running outside T3 Code, so its
+        // process environment cannot be changed here. Do not evaluate the
+        // workspace .envrc only to discard it (or fail a remote session).
+        const sessionEnvironment = serverUrl
+          ? undefined
+          : yield* resolveProviderSessionEnvironment({
+              sessionEnvironment: options?.sessionEnvironment,
+              cwd: directory,
+              provider: PROVIDER,
+              threadId: input.threadId,
+            });
         const existing = sessions.get(input.threadId);
         if (existing) {
           yield* stopOpenCodeContext(existing);
@@ -1047,7 +1061,7 @@ export function makeOpenCodeAdapter(
               const server = yield* openCodeRuntime.connectToOpenCodeServer({
                 binaryPath,
                 serverUrl,
-                ...(options?.environment ? { environment: options.environment } : {}),
+                ...(sessionEnvironment ? { environment: sessionEnvironment } : {}),
               });
               const client = openCodeRuntime.createOpenCodeSdkClient({
                 baseUrl: server.url,

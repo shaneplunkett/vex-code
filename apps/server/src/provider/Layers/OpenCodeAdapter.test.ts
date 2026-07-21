@@ -1,6 +1,6 @@
 import * as NodeAssert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { it } from "@effect/vitest";
+import { it, vi } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -24,6 +24,10 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import type { OpenCodeAdapterShape } from "../Services/OpenCodeAdapter.ts";
+import {
+  makeProviderSessionEnvironmentWithResolver,
+  WorkspaceEnvironmentError,
+} from "../WorkspaceEnvironment.ts";
 import {
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -53,6 +57,7 @@ type MessageEntry = {
 const runtimeMock = {
   state: {
     startCalls: [] as string[],
+    connectionEnvironments: [] as Array<NodeJS.ProcessEnv | undefined>,
     sessionCreateUrls: [] as string[],
     authHeaders: [] as Array<string | null>,
     abortCalls: [] as string[],
@@ -66,6 +71,7 @@ const runtimeMock = {
   },
   reset() {
     this.state.startCalls.length = 0;
+    this.state.connectionEnvironments.length = 0;
     this.state.sessionCreateUrls.length = 0;
     this.state.authHeaders.length = 0;
     this.state.abortCalls.length = 0;
@@ -97,9 +103,10 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         exitCode: Effect.never,
       };
     }),
-  connectToOpenCodeServer: ({ serverUrl }) =>
+  connectToOpenCodeServer: ({ serverUrl, environment }) =>
     Effect.gen(function* () {
       const url = serverUrl ?? "http://127.0.0.1:4301";
+      runtimeMock.state.connectionEnvironments.push(environment);
       // Unconditionally register a scope finalizer for test observability —
       // preserves the `closeCalls` / `closeError` probes that the existing
       // suites rely on. Production code never attaches a finalizer to an
@@ -220,8 +227,104 @@ const OpenCodeAdapterTestLayer = Layer.effect(
   Layer.provideMerge(NodeServices.layer),
 );
 
+const externalWorkspaceEnvironmentResolver = vi.fn((cwd: string) =>
+  Effect.fail(
+    new WorkspaceEnvironmentError({
+      cwd,
+      detail: "external servers must not evaluate workspace environments",
+    }),
+  ),
+);
+const externalSessionEnvironment = makeProviderSessionEnvironmentWithResolver({
+  processEnvironment: { PATH: "/provider/bin" },
+  resolveWorkspaceEnvironment: externalWorkspaceEnvironmentResolver,
+});
+const OpenCodeExternalEnvironmentTestLayer = Layer.effect(
+  OpenCodeAdapter,
+  makeOpenCodeAdapter(openCodeAdapterTestSettings, {
+    sessionEnvironment: externalSessionEnvironment,
+  }),
+).pipe(
+  Layer.provideMerge(Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble)),
+  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+  Layer.provideMerge(ServerSettingsService.layerTest()),
+  Layer.provideMerge(providerSessionDirectoryTestLayer),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+const openCodeLocalSettings = Schema.decodeSync(OpenCodeSettings)({
+  binaryPath: "fake-opencode",
+});
+const localWorkspaceEnvironmentResolver = vi.fn((cwd: string) =>
+  Effect.succeed({
+    PATH: "/workspace/bin",
+    DIRENV_MARKER: cwd,
+  }),
+);
+const localSessionEnvironment = makeProviderSessionEnvironmentWithResolver({
+  processEnvironment: { PATH: "/provider/bin" },
+  resolveWorkspaceEnvironment: localWorkspaceEnvironmentResolver,
+});
+const OpenCodeLocalEnvironmentTestLayer = Layer.effect(
+  OpenCodeAdapter,
+  makeOpenCodeAdapter(openCodeLocalSettings, {
+    sessionEnvironment: localSessionEnvironment,
+  }),
+).pipe(
+  Layer.provideMerge(Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble)),
+  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+  Layer.provideMerge(ServerSettingsService.layerTest()),
+  Layer.provideMerge(providerSessionDirectoryTestLayer),
+  Layer.provideMerge(NodeServices.layer),
+);
+
 beforeEach(() => {
   runtimeMock.reset();
+});
+
+it.layer(OpenCodeExternalEnvironmentTestLayer)("OpenCode external workspace environment", (it) => {
+  it.effect("does not evaluate direnv for an externally managed server", () =>
+    Effect.gen(function* () {
+      externalWorkspaceEnvironmentResolver.mockClear();
+      const adapter = yield* OpenCodeAdapter;
+
+      const session = yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId: asThreadId("thread-opencode-external-environment"),
+        cwd: "/tmp/blocked-external-workspace",
+        runtimeMode: "full-access",
+      });
+
+      NodeAssert.equal(session.threadId, "thread-opencode-external-environment");
+      NodeAssert.equal(externalWorkspaceEnvironmentResolver.mock.calls.length, 0);
+      NodeAssert.deepEqual(runtimeMock.state.startCalls, []);
+    }),
+  );
+});
+
+it.layer(OpenCodeLocalEnvironmentTestLayer)("OpenCode local workspace environment", (it) => {
+  it.effect("passes the resolved workspace environment to a local server", () =>
+    Effect.gen(function* () {
+      localWorkspaceEnvironmentResolver.mockClear();
+      const adapter = yield* OpenCodeAdapter;
+      const cwd = "/tmp/opencode-local-workspace";
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId: asThreadId("thread-opencode-local-environment"),
+        cwd,
+        runtimeMode: "full-access",
+      });
+
+      NodeAssert.deepEqual(localWorkspaceEnvironmentResolver.mock.calls, [[cwd]]);
+      NodeAssert.deepEqual(runtimeMock.state.connectionEnvironments, [
+        {
+          PATH: "/workspace/bin",
+          DIRENV_MARKER: cwd,
+        },
+      ]);
+    }),
+  );
 });
 
 const advanceTestClock = (ms: number) =>

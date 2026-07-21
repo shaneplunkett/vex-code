@@ -87,11 +87,16 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
+import {
+  resolveProviderSessionEnvironment,
+  type ProviderSessionEnvironmentOptions,
+} from "../WorkspaceEnvironment.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
 
 const PROVIDER = ProviderDriverKind.make("claudeAgent");
+const CLAUDE_PROTECTED_ENVIRONMENT_VARIABLES = ["HOME"] as const;
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
   RuntimeContentStreamKind,
@@ -211,9 +216,8 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly close: () => void;
 }
 
-export interface ClaudeAdapterLiveOptions {
+export interface ClaudeAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
   readonly instanceId?: ProviderInstanceId;
-  readonly environment?: NodeJS.ProcessEnv;
   readonly createQuery?: (input: {
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: ClaudeQueryOptions;
@@ -1344,9 +1348,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;
   const crypto = yield* Crypto.Crypto;
-  const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, options?.environment).pipe(
-    Effect.provideService(Path.Path, path),
-  );
   const nativeEventLogger =
     options?.nativeEventLogger ??
     (options?.nativeEventLogPath !== undefined
@@ -3065,6 +3066,20 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           issue: `Expected provider '${PROVIDER}' but received '${input.provider}'.`,
         });
       }
+
+      const cwd = input.cwd ?? serverConfig.cwd;
+      const workspaceEnvironment =
+        (yield* resolveProviderSessionEnvironment({
+          sessionEnvironment: options?.sessionEnvironment,
+          cwd,
+          provider: PROVIDER,
+          threadId: input.threadId,
+          protectedVariables: CLAUDE_PROTECTED_ENVIRONMENT_VARIABLES,
+        })) ?? process.env;
+      const claudeEnvironment = yield* makeClaudeEnvironment(
+        claudeSettings,
+        workspaceEnvironment,
+      ).pipe(Effect.provideService(Path.Path, path));
 
       const existingContext = sessions.get(input.threadId);
       if (existingContext) {
