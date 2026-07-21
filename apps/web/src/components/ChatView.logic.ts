@@ -8,6 +8,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   type TurnId,
+  type WorkspaceEnvironmentStatus,
 } from "@t3tools/contracts";
 import { type ChatMessage, type SessionPhase, type Thread } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
@@ -26,6 +27,18 @@ export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
+
+export function workspaceEnvironmentSendDecision(input: {
+  readonly cwd: string;
+  readonly readyCwd: string | null;
+  readonly status: WorkspaceEnvironmentStatus | null;
+  readonly isPending: boolean;
+}): "approvalRequired" | "inspect" | "ready" {
+  if (input.readyCwd === input.cwd) return "ready";
+  if (input.status?._tag === "approvalRequired") return "approvalRequired";
+  if (input.status === null || input.isPending) return "inspect";
+  return "ready";
+}
 
 export function buildLocalDraftThread(
   threadId: ThreadId,

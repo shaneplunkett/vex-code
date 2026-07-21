@@ -16,9 +16,10 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import type * as ProcessRunner from "../processRunner.ts";
 import {
   makeProviderSessionEnvironmentWithResolver,
+  makeWorkspaceEnvironmentManagerWithRunner,
   makeWorkspaceEnvironmentResolver,
   makeWorkspaceEnvironmentResolverWithRunner,
-  WorkspaceEnvironmentError,
+  WorkspaceEnvironmentApprovalRequired,
 } from "./WorkspaceEnvironment.ts";
 
 function output(input: {
@@ -184,9 +185,129 @@ describe("WorkspaceEnvironment", () => {
     return resolve("/workspace").pipe(
       Effect.flip,
       Effect.map((error) => {
-        expect(error).toBeInstanceOf(WorkspaceEnvironmentError);
-        expect(error.message).toContain("direnv allow");
+        expect(error).toBeInstanceOf(WorkspaceEnvironmentApprovalRequired);
+        expect(error).toMatchObject({
+          cwd: "/workspace",
+          envrcPath: "/workspace/.envrc",
+        });
         expect(error.message).not.toContain("SECRET_DO_NOT_ECHO");
+      }),
+    );
+  });
+
+  it.effect("reports blocked approval as inspectable state", () => {
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>(() =>
+      Effect.succeed(
+        output({
+          code: 1,
+          stderr: "direnv: error /workspace/.envrc is blocked",
+        }),
+      ),
+    );
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      run,
+    });
+
+    return manager.inspect("/workspace").pipe(
+      Effect.map((status) => {
+        expect(status).toEqual({
+          _tag: "approvalRequired",
+          envrcPath: "/workspace/.envrc",
+        });
+      }),
+    );
+  });
+
+  it.effect("allows and validates a blocked workspace", () => {
+    let allowed = false;
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>((input) => {
+      if (input.args[0] === "allow") {
+        allowed = true;
+        return Effect.succeed(output({}));
+      }
+      return Effect.succeed(
+        allowed
+          ? output({ stdout: JSON.stringify({ READY: "yes" }) })
+          : output({
+              code: 1,
+              stderr: "direnv: error /workspace/.envrc is blocked",
+            }),
+      );
+    });
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      run,
+    });
+
+    return manager.allow("/workspace").pipe(
+      Effect.map((status) => {
+        expect(status).toEqual({ _tag: "ready" });
+        expect(run).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            args: ["allow", "/workspace/.envrc"],
+            cwd: "/workspace",
+          }),
+        );
+        expect(run).toHaveBeenCalledTimes(3);
+      }),
+    );
+  });
+
+  it.effect("inherits approval for an identical worktree .envrc", () => {
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>(() =>
+      Effect.succeed(output({ stdout: JSON.stringify({ READY: "yes" }) })),
+    );
+    const readFile = vi.fn<(path: string) => Promise<Uint8Array>>(() =>
+      Promise.resolve(new TextEncoder().encode("use flake\n")),
+    );
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      run,
+      readFile,
+    });
+
+    return manager.inheritApproval({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+      Effect.map((inherited) => {
+        expect(inherited).toBe(true);
+        expect(readFile.mock.calls.map(([path]) => path)).toEqual([
+          "/project/.envrc",
+          "/worktree/.envrc",
+        ]);
+        expect(run).toHaveBeenCalledWith(
+          expect.objectContaining({
+            args: ["allow", "/worktree/.envrc"],
+            cwd: "/worktree",
+          }),
+        );
+      }),
+    );
+  });
+
+  it.effect("does not inherit approval when the worktree .envrc differs", () => {
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>(() =>
+      Effect.succeed(output({ stdout: JSON.stringify({ READY: "yes" }) })),
+    );
+    const readFile = vi.fn<(path: string) => Promise<Uint8Array>>((path) =>
+      Promise.resolve(
+        new TextEncoder().encode(path.startsWith("/project") ? "trusted" : "changed"),
+      ),
+    );
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      run,
+      readFile,
+    });
+
+    return manager.inheritApproval({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+      Effect.map((inherited) => {
+        expect(inherited).toBe(false);
+        expect(run).toHaveBeenCalledTimes(1);
       }),
     );
   });

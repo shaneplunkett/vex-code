@@ -15,6 +15,7 @@ import {
   reconcileRetainedMountedThreadIds,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
+  workspaceEnvironmentSendDecision,
 } from "./ChatView.logic";
 
 const environmentId = EnvironmentId.make("environment-local");
@@ -91,6 +92,41 @@ describe("buildThreadTurnInterruptInput", () => {
     expect(buildThreadTurnInterruptInput(makeThread({ session: readySession }))).toEqual({
       threadId,
     });
+  });
+});
+
+describe("workspaceEnvironmentSendDecision", () => {
+  it("blocks a send when the workspace .envrc needs approval", () => {
+    expect(
+      workspaceEnvironmentSendDecision({
+        cwd: "/repo",
+        readyCwd: null,
+        status: { _tag: "approvalRequired", envrcPath: "/repo/.envrc" },
+        isPending: false,
+      }),
+    ).toBe("approvalRequired");
+  });
+
+  it("uses the just-approved cwd while the status query refreshes", () => {
+    expect(
+      workspaceEnvironmentSendDecision({
+        cwd: "/repo",
+        readyCwd: "/repo",
+        status: { _tag: "approvalRequired", envrcPath: "/repo/.envrc" },
+        isPending: true,
+      }),
+    ).toBe("ready");
+  });
+
+  it("inspects when no status has loaded yet", () => {
+    expect(
+      workspaceEnvironmentSendDecision({
+        cwd: "/repo",
+        readyCwd: null,
+        status: null,
+        isPending: true,
+      }),
+    ).toBe("inspect");
   });
 });
 

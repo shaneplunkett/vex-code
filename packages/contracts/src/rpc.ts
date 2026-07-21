@@ -81,6 +81,11 @@ import {
   ProjectWriteFileResult,
 } from "./project.ts";
 import {
+  WorkspaceEnvironmentInput,
+  WorkspaceEnvironmentRequestError,
+  WorkspaceEnvironmentStatus,
+} from "./workspaceEnvironment.ts";
+import {
   TerminalAttachInput,
   TerminalAttachStreamEvent,
   TerminalClearInput,
@@ -155,6 +160,10 @@ export const WS_METHODS = {
   projectsReadFile: "projects.readFile",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+
+  // Workspace environment methods
+  workspaceEnvironmentInspect: "workspaceEnvironment.inspect",
+  workspaceEnvironmentAllow: "workspaceEnvironment.allow",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -378,6 +387,18 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   payload: ProjectWriteFileInput,
   success: ProjectWriteFileResult,
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
+});
+
+export const WsWorkspaceEnvironmentInspectRpc = Rpc.make(WS_METHODS.workspaceEnvironmentInspect, {
+  payload: WorkspaceEnvironmentInput,
+  success: WorkspaceEnvironmentStatus,
+  error: Schema.Union([WorkspaceEnvironmentRequestError, EnvironmentAuthorizationError]),
+});
+
+export const WsWorkspaceEnvironmentAllowRpc = Rpc.make(WS_METHODS.workspaceEnvironmentAllow, {
+  payload: WorkspaceEnvironmentInput,
+  success: WorkspaceEnvironmentStatus,
+  error: Schema.Union([WorkspaceEnvironmentRequestError, EnvironmentAuthorizationError]),
 });
 
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
@@ -711,6 +732,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsReadFileRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsWorkspaceEnvironmentInspectRpc,
+  WsWorkspaceEnvironmentAllowRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,

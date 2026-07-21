@@ -1,4 +1,13 @@
-import type { ProviderDriverKind, ProviderInstanceEnvironment, ThreadId } from "@t3tools/contracts";
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+
+import type {
+  ProviderDriverKind,
+  ProviderInstanceEnvironment,
+  ThreadId,
+  WorkspaceEnvironmentStatus,
+} from "@t3tools/contracts";
 import { resolveCommandPath } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -27,9 +36,39 @@ export class WorkspaceEnvironmentError extends Schema.TaggedErrorClass<Workspace
   }
 }
 
+export class WorkspaceEnvironmentApprovalRequired extends Schema.TaggedErrorClass<WorkspaceEnvironmentApprovalRequired>()(
+  "WorkspaceEnvironmentApprovalRequired",
+  {
+    cwd: Schema.String,
+    envrcPath: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `The workspace .envrc is blocked for '${this.cwd}'.`;
+  }
+}
+
+export type WorkspaceEnvironmentResolveError =
+  | WorkspaceEnvironmentApprovalRequired
+  | WorkspaceEnvironmentError;
+
 export type WorkspaceEnvironmentResolver = (
   cwd: string,
-) => Effect.Effect<NodeJS.ProcessEnv, WorkspaceEnvironmentError>;
+) => Effect.Effect<NodeJS.ProcessEnv, WorkspaceEnvironmentResolveError>;
+
+export interface WorkspaceEnvironmentManager {
+  readonly resolve: WorkspaceEnvironmentResolver;
+  readonly inspect: (
+    cwd: string,
+  ) => Effect.Effect<WorkspaceEnvironmentStatus, WorkspaceEnvironmentError>;
+  readonly allow: (
+    cwd: string,
+  ) => Effect.Effect<WorkspaceEnvironmentStatus, WorkspaceEnvironmentError>;
+  readonly inheritApproval: (input: {
+    readonly sourceCwd: string;
+    readonly targetCwd: string;
+  }) => Effect.Effect<boolean, WorkspaceEnvironmentError>;
+}
 
 export interface ProviderSessionEnvironment {
   readonly processEnvironment: NodeJS.ProcessEnv;
@@ -53,6 +92,7 @@ interface WorkspaceEnvironmentResolverOptions {
 interface WorkspaceEnvironmentRunnerOptions extends WorkspaceEnvironmentResolverOptions {
   readonly direnvCommand: string | null;
   readonly run: ProcessRunner.ProcessRunner["Service"]["run"];
+  readonly readFile?: (path: string) => Promise<Uint8Array>;
 }
 
 function applyDirenvExport(
@@ -88,17 +128,32 @@ function restoreProtectedVariables(
   return restored;
 }
 
-function direnvFailureDetail(stderr: string, code: number | null): string {
-  const normalized = stderr.toLowerCase();
-  if (normalized.includes("is blocked") || normalized.includes("not allowed")) {
-    return "The workspace .envrc is blocked. Run 'direnv allow' in the workspace, then retry the session.";
-  }
-  return `direnv export failed${code === null ? "" : ` with exit code ${code}`}. Run 'direnv export json' in the workspace for details.`;
+function blockedEnvrcPath(stderr: string, cwd: string): string {
+  const match = /direnv:\s+error\s+(.+?)\s+(?:is blocked|is not allowed)/i.exec(stderr);
+  return match?.[1]?.trim() || NodePath.join(cwd, ".envrc");
 }
 
-export function makeWorkspaceEnvironmentResolverWithRunner(
+function direnvFailure(
+  cwd: string,
+  stderr: string,
+  code: number | null,
+): WorkspaceEnvironmentResolveError {
+  const normalized = stderr.toLowerCase();
+  if (normalized.includes("is blocked") || normalized.includes("not allowed")) {
+    return new WorkspaceEnvironmentApprovalRequired({
+      cwd,
+      envrcPath: blockedEnvrcPath(stderr, cwd),
+    });
+  }
+  return new WorkspaceEnvironmentError({
+    cwd,
+    detail: `direnv export failed${code === null ? "" : ` with exit code ${code}`}. Run 'direnv export json' in the workspace for details.`,
+  });
+}
+
+export function makeWorkspaceEnvironmentManagerWithRunner(
   options: WorkspaceEnvironmentRunnerOptions,
-): WorkspaceEnvironmentResolver {
+): WorkspaceEnvironmentManager {
   const baseEnvironment = { ...(options.baseEnvironment ?? process.env) };
   const fallbackEnvironment = mergeProviderInstanceEnvironment(
     options.providerEnvironment,
@@ -106,13 +161,26 @@ export function makeWorkspaceEnvironmentResolverWithRunner(
   );
 
   const direnvCommand = options.direnvCommand;
+  const readFile = options.readFile ?? NodeFSP.readFile;
   if (direnvCommand === null) {
-    return Effect.fn("WorkspaceEnvironmentResolver.fallback")(() =>
+    const resolve = Effect.fn("WorkspaceEnvironmentResolver.fallback")(() =>
       Effect.succeed({ ...fallbackEnvironment }),
     );
+    return {
+      resolve,
+      inspect: Effect.fn("WorkspaceEnvironmentManager.inspectInactive")(() =>
+        Effect.succeed({ _tag: "inactive" as const }),
+      ),
+      allow: Effect.fn("WorkspaceEnvironmentManager.allowInactive")(() =>
+        Effect.succeed({ _tag: "inactive" as const }),
+      ),
+      inheritApproval: Effect.fn("WorkspaceEnvironmentManager.inheritInactive")(() =>
+        Effect.succeed(false),
+      ),
+    };
   }
 
-  return Effect.fn("WorkspaceEnvironmentResolver.resolve")(function* (cwd: string) {
+  const resolve = Effect.fn("WorkspaceEnvironmentResolver.resolve")(function* (cwd: string) {
     const output = yield* options
       .run({
         command: direnvCommand,
@@ -134,10 +202,7 @@ export function makeWorkspaceEnvironmentResolverWithRunner(
       );
 
     if (output.code !== 0) {
-      return yield* new WorkspaceEnvironmentError({
-        cwd,
-        detail: direnvFailureDetail(output.stderr, output.code),
-      });
+      return yield* direnvFailure(cwd, output.stderr, output.code);
     }
 
     // direnv emits an empty successful export when the supplied environment
@@ -163,9 +228,100 @@ export function makeWorkspaceEnvironmentResolverWithRunner(
     // applied by their adapters after this resolver returns.
     return mergeProviderInstanceEnvironment(options.providerEnvironment, workspaceEnvironment);
   });
+
+  const inspect = Effect.fn("WorkspaceEnvironmentManager.inspect")(function* (cwd: string) {
+    return yield* resolve(cwd).pipe(
+      Effect.as({ _tag: "ready" as const }),
+      Effect.catchTag("WorkspaceEnvironmentApprovalRequired", (error) =>
+        Effect.succeed({
+          _tag: "approvalRequired" as const,
+          envrcPath: error.envrcPath,
+        }),
+      ),
+    );
+  });
+
+  const allowEnvrc = Effect.fn("WorkspaceEnvironmentManager.allowEnvrc")(function* (
+    cwd: string,
+    envrcPath: string,
+  ) {
+    const output = yield* options
+      .run({
+        command: direnvCommand,
+        args: ["allow", envrcPath],
+        cwd,
+        env: baseEnvironment,
+        maxOutputBytes: DIRENV_EXPORT_MAX_OUTPUT_BYTES,
+        timeout: DIRENV_EXPORT_TIMEOUT,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new WorkspaceEnvironmentError({
+              cwd,
+              detail: "direnv could not approve the workspace .envrc.",
+              cause,
+            }),
+        ),
+      );
+    if (output.code !== 0) {
+      return yield* new WorkspaceEnvironmentError({
+        cwd,
+        detail: `direnv allow failed${output.code === null ? "" : ` with exit code ${output.code}`}.`,
+      });
+    }
+  });
+
+  const allow = Effect.fn("WorkspaceEnvironmentManager.allow")(function* (cwd: string) {
+    const status = yield* inspect(cwd);
+    if (status._tag !== "approvalRequired") return status;
+    yield* allowEnvrc(cwd, status.envrcPath);
+    const confirmed = yield* inspect(cwd);
+    if (confirmed._tag === "approvalRequired") {
+      return yield* new WorkspaceEnvironmentError({
+        cwd,
+        detail: "direnv still reports the workspace .envrc as blocked after approval.",
+      });
+    }
+    return confirmed;
+  });
+
+  const inheritApproval = Effect.fn("WorkspaceEnvironmentManager.inheritApproval")(
+    function* (input: { readonly sourceCwd: string; readonly targetCwd: string }) {
+      const sourceStatus = yield* inspect(input.sourceCwd);
+      if (sourceStatus._tag !== "ready") return false;
+
+      const sourceEnvrcPath = NodePath.join(input.sourceCwd, ".envrc");
+      const targetEnvrcPath = NodePath.join(input.targetCwd, ".envrc");
+      const [sourceEnvrc, targetEnvrc] = yield* Effect.all([
+        Effect.tryPromise(() => readFile(sourceEnvrcPath)).pipe(Effect.option),
+        Effect.tryPromise(() => readFile(targetEnvrcPath)).pipe(Effect.option),
+      ]);
+      if (Option.isNone(sourceEnvrc) || Option.isNone(targetEnvrc)) return false;
+      if (!Buffer.from(sourceEnvrc.value).equals(Buffer.from(targetEnvrc.value))) return false;
+
+      yield* allowEnvrc(input.targetCwd, targetEnvrcPath);
+      const targetStatus = yield* inspect(input.targetCwd);
+      if (targetStatus._tag !== "ready") {
+        return yield* new WorkspaceEnvironmentError({
+          cwd: input.targetCwd,
+          detail: "The matching worktree .envrc could not be approved.",
+        });
+      }
+      return true;
+    },
+  );
+
+  return { resolve, inspect, allow, inheritApproval };
 }
 
-export const makeWorkspaceEnvironmentResolver = Effect.fn("makeWorkspaceEnvironmentResolver")(
+export function makeWorkspaceEnvironmentResolverWithRunner(
+  options: WorkspaceEnvironmentRunnerOptions,
+): WorkspaceEnvironmentResolver {
+  return makeWorkspaceEnvironmentManagerWithRunner(options).resolve;
+}
+
+export const makeWorkspaceEnvironmentManager = Effect.fn("makeWorkspaceEnvironmentManager")(
   function* (options: WorkspaceEnvironmentResolverOptions = {}) {
     const baseEnvironment = { ...(options.baseEnvironment ?? process.env) };
     const resolvedCommand = yield* resolveCommandPath("direnv", {
@@ -176,12 +332,18 @@ export const makeWorkspaceEnvironmentResolver = Effect.fn("makeWorkspaceEnvironm
     }).pipe(Effect.option);
     const processRunner = yield* ProcessRunner.make();
 
-    return makeWorkspaceEnvironmentResolverWithRunner({
+    return makeWorkspaceEnvironmentManagerWithRunner({
       ...options,
       baseEnvironment,
       direnvCommand: Option.getOrNull(resolvedCommand),
       run: processRunner.run,
     });
+  },
+);
+
+export const makeWorkspaceEnvironmentResolver = Effect.fn("makeWorkspaceEnvironmentResolver")(
+  function* (options: WorkspaceEnvironmentResolverOptions = {}) {
+    return (yield* makeWorkspaceEnvironmentManager(options)).resolve;
   },
 );
 

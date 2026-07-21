@@ -44,6 +44,7 @@ export function createProjectEnvironmentAtoms<R, E>(
 ) {
   const projectScheduler = createAtomCommandScheduler();
   const fileScheduler = createAtomCommandScheduler();
+  const workspaceEnvironmentScheduler = createAtomCommandScheduler();
   const optimisticFileFamily = Atom.family((key: string) =>
     Atom.make<OptimisticProjectFile | null>(null).pipe(
       Atom.withLabel(`environment-data:projects:optimistic-file:${key}`),
@@ -69,6 +70,12 @@ export function createProjectEnvironmentAtoms<R, E>(
     readFile: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:read-file",
       tag: WS_METHODS.projectsReadFile,
+      staleTimeMs: 30_000,
+      idleTtlMs: 5 * 60_000,
+    }),
+    workspaceEnvironmentStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:workspace-environment-status",
+      tag: WS_METHODS.workspaceEnvironmentInspect,
       staleTimeMs: 30_000,
       idleTtlMs: 5 * 60_000,
     }),
@@ -100,6 +107,24 @@ export function createProjectEnvironmentAtoms<R, E>(
         mode: "serial",
         key: ({ environmentId, input }) =>
           JSON.stringify([environmentId, input.cwd, input.relativePath]),
+      },
+    }),
+    inspectWorkspaceEnvironment: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:inspect-workspace-environment",
+      tag: WS_METHODS.workspaceEnvironmentInspect,
+      scheduler: workspaceEnvironmentScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.cwd]),
+      },
+    }),
+    allowWorkspaceEnvironment: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:allow-workspace-environment",
+      tag: WS_METHODS.workspaceEnvironmentAllow,
+      scheduler: workspaceEnvironmentScheduler,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.cwd]),
       },
     }),
   };

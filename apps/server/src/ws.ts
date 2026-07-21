@@ -45,6 +45,7 @@ import {
   ProjectReadFileError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  WorkspaceEnvironmentRequestError,
   RelayClientInstallFailedError,
   type RelayClientInstallProgressEvent,
   OrchestrationReplayEventsError,
@@ -81,6 +82,7 @@ import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import type { ProviderServiceError } from "./provider/Errors.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
+import { makeWorkspaceEnvironmentManager } from "./provider/WorkspaceEnvironment.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
@@ -310,6 +312,8 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.projectsReadFile, AuthOrchestrationReadScope],
   [WS_METHODS.projectsSearchEntries, AuthOrchestrationReadScope],
   [WS_METHODS.projectsWriteFile, AuthOrchestrationOperateScope],
+  [WS_METHODS.workspaceEnvironmentInspect, AuthOrchestrationReadScope],
+  [WS_METHODS.workspaceEnvironmentAllow, AuthOrchestrationOperateScope],
   [WS_METHODS.shellOpenInEditor, AuthOrchestrationOperateScope],
   [WS_METHODS.filesystemBrowse, AuthOrchestrationReadScope],
   [WS_METHODS.assetsCreateUrl, AuthOrchestrationReadScope],
@@ -422,6 +426,7 @@ const makeWsRpcLayer = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+      const workspaceEnvironment = yield* makeWorkspaceEnvironmentManager();
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const repositoryIdentityResolver =
         yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
@@ -876,6 +881,10 @@ const makeWsRpcLayer = (
                 path: null,
               });
               targetWorktreePath = worktree.worktree.path;
+              yield* workspaceEnvironment.inheritApproval({
+                sourceCwd: bootstrap.prepareWorktree.projectCwd,
+                targetCwd: targetWorktreePath,
+              });
               yield* orchestrationEngine.dispatch({
                 type: "thread.meta.update",
                 commandId: yield* serverCommandId("bootstrap-thread-meta-update"),
@@ -1487,6 +1496,36 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "workspace" },
           ),
+        [WS_METHODS.workspaceEnvironmentInspect]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.workspaceEnvironmentInspect,
+            workspaceEnvironment.inspect(input.cwd).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new WorkspaceEnvironmentRequestError({
+                    cwd: input.cwd,
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.workspaceEnvironmentAllow]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.workspaceEnvironmentAllow,
+            workspaceEnvironment.allow(input.cwd).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new WorkspaceEnvironmentRequestError({
+                    cwd: input.cwd,
+                    message: cause.message,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
         [WS_METHODS.shellOpenInEditor]: (input) =>
           observeRpcEffect(WS_METHODS.shellOpenInEditor, externalLauncher.launchEditor(input), {
             "rpc.aggregate": "workspace",
@@ -1618,6 +1657,29 @@ const makeWsRpcLayer = (
             WS_METHODS.gitPreparePullRequestThread,
             gitWorkflow
               .preparePullRequestThread(input)
+              .pipe(
+                Effect.tap((result) =>
+                  result.worktreePath
+                    ? workspaceEnvironment
+                        .inheritApproval({
+                          sourceCwd: input.cwd,
+                          targetCwd: result.worktreePath,
+                        })
+                        .pipe(
+                          Effect.catch((cause) =>
+                            Effect.logWarning(
+                              "Could not inherit direnv approval for pull request worktree",
+                              {
+                                sourceCwd: input.cwd,
+                                targetCwd: result.worktreePath,
+                                detail: cause.message,
+                              },
+                            ),
+                          ),
+                        )
+                    : Effect.void,
+                ),
+              )
               .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "git" },
           ),
@@ -1628,7 +1690,25 @@ const makeWsRpcLayer = (
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           observeRpcEffect(
             WS_METHODS.vcsCreateWorktree,
-            gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            gitWorkflow.createWorktree(input).pipe(
+              Effect.tap((result) =>
+                workspaceEnvironment
+                  .inheritApproval({
+                    sourceCwd: input.cwd,
+                    targetCwd: result.worktree.path,
+                  })
+                  .pipe(
+                    Effect.catch((cause) =>
+                      Effect.logWarning("Could not inherit direnv approval for worktree", {
+                        sourceCwd: input.cwd,
+                        targetCwd: result.worktree.path,
+                        detail: cause.message,
+                      }),
+                    ),
+                  ),
+              ),
+              Effect.tap(() => refreshGitStatus(input.cwd)),
+            ),
             { "rpc.aggregate": "vcs" },
           ),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>
