@@ -1,0 +1,135 @@
+import * as NodeOS from "node:os";
+
+import { ClaudeSettings } from "@t3tools/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
+
+import { probeClaudeCapabilities } from "./ClaudeProvider.ts";
+
+const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
+
+it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
+  it.effect("resolves account, command, and skill capabilities without sending a prompt", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-probe-sdk-" });
+      const executablePath = path.join(tempDir, "fake-claude.mjs");
+      const invocationPath = path.join(tempDir, "invocation.json");
+      const workspaceCwd = path.join(tempDir, "workspace");
+      yield* fs.makeDirectory(workspaceCwd, { recursive: true });
+
+      yield* fs.writeFileString(
+        executablePath,
+        [
+          "#!/usr/bin/env node",
+          'import { existsSync, readFileSync, writeFileSync } from "node:fs";',
+          'import { createInterface } from "node:readline";',
+          "const args = process.argv.slice(2);",
+          'const mcpConfigIndex = args.indexOf("--mcp-config");',
+          "const rawMcpConfig = mcpConfigIndex >= 0 ? args[mcpConfigIndex + 1] : undefined;",
+          "let mcpConfig;",
+          "if (rawMcpConfig) {",
+          '  const contents = existsSync(rawMcpConfig) ? readFileSync(rawMcpConfig, "utf8") : rawMcpConfig;',
+          "  try { mcpConfig = JSON.parse(contents); } catch { mcpConfig = contents; }",
+          "}",
+          "writeFileSync(process.env.T3_PROBE_INVOCATION_PATH, JSON.stringify({",
+          "  args,",
+          "  cwd: process.cwd(),",
+          "  connectorEnv: process.env.ENABLE_CLAUDEAI_MCP_SERVERS,",
+          "  mcpConfig,",
+          "}));",
+          "const lines = createInterface({ input: process.stdin });",
+          'lines.on("line", (line) => {',
+          "  const message = JSON.parse(line);",
+          '  if (message.type !== "control_request") return;',
+          '  if (message.request?.subtype === "reload_skills") {',
+          "    process.stdout.write(JSON.stringify({",
+          '      type: "control_response",',
+          "      response: {",
+          '        subtype: "success",',
+          "        request_id: message.request_id,",
+          '        response: { skills: [{ name: "probe-fake-skill", description: "Fake skill (user)", argumentHint: "" }] },',
+          "      },",
+          '    }) + "\\n");',
+          "    return;",
+          "  }",
+          '  if (message.request?.subtype !== "initialize") return;',
+          "  process.stdout.write(JSON.stringify({",
+          '    type: "control_response",',
+          "    response: {",
+          '      subtype: "success",',
+          "      request_id: message.request_id,",
+          "      response: {",
+          '        commands: [{ name: "review", description: "Review changes", argumentHint: "[path]" }],',
+          "        agents: [],",
+          '        output_style: "default",',
+          '        available_output_styles: ["default"],',
+          "        models: [],",
+          '        account: { email: "dev@example.com", subscriptionType: "pro", tokenSource: "oauth" },',
+          "      },",
+          "    },",
+          '  }) + "\\n");',
+          "});",
+          "setInterval(() => {}, 1_000);",
+          "",
+        ].join("\n"),
+      );
+      yield* fs.chmod(executablePath, 0o755);
+
+      const capabilities = yield* probeClaudeCapabilities(
+        decodeClaudeSettings({ binaryPath: executablePath }),
+        {
+          ...process.env,
+          T3_PROBE_INVOCATION_PATH: invocationPath,
+          ENABLE_CLAUDEAI_MCP_SERVERS: "true",
+        },
+        workspaceCwd,
+      );
+
+      // The fake skill dir doesn't exist on disk, so the mapper falls back to a
+      // constructed path under the default config dir (`~/.claude`) and takes
+      // the scope from the stripped `(user)` description suffix.
+      const expectedSkillPath = path.join(
+        NodeOS.homedir(),
+        ".claude",
+        "skills",
+        "probe-fake-skill",
+      );
+      assert.deepEqual(capabilities, {
+        email: "dev@example.com",
+        subscriptionType: "pro",
+        tokenSource: "oauth",
+        apiProvider: undefined,
+        slashCommands: [
+          {
+            name: "review",
+            description: "Review changes",
+            input: { hint: "[path]" },
+          },
+        ],
+        skills: [
+          {
+            name: "probe-fake-skill",
+            path: expectedSkillPath,
+            enabled: true,
+            description: "Fake skill",
+            scope: "user",
+          },
+        ],
+      });
+
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      const invocation = JSON.parse(yield* fs.readFileString(invocationPath)) as {
+        readonly args: ReadonlyArray<string>;
+        readonly cwd: string;
+      };
+      assert.equal(invocation.cwd, yield* fs.realPath(workspaceCwd));
+      assert.equal(invocation.args.includes("--setting-sources=user,project,local"), true);
+    }).pipe(Effect.scoped),
+  );
+});

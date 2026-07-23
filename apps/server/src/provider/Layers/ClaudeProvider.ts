@@ -1,8 +1,11 @@
+import * as NodeOS from "node:os";
+
 import {
   type ClaudeSettings,
   type ModelCapabilities,
   type ModelSelection,
   type ServerProviderModel,
+  type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -37,7 +40,8 @@ import {
   type ServerProviderDraft,
 } from "../providerSnapshot.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
-import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
+import { makeClaudeEnvironment, resolveClaudeHomePath } from "../Drivers/ClaudeHome.ts";
+import { parseClaudeReloadedSkills, pathExistsSync } from "./ClaudeSkillDiscovery.ts";
 
 const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
@@ -492,6 +496,8 @@ function apiProviderAuthMetadata(
 // `undefined` and left the provider unverified and unselectable in the picker.
 const CAPABILITIES_PROBE_TIMEOUT_MS = 25_000;
 
+const SKILLS_RELOAD_TIMEOUT_MS = 5_000;
+
 function nonEmptyProbeString(value: string): string | undefined {
   const candidate = value.trim();
   return candidate ? candidate : undefined;
@@ -508,6 +514,7 @@ type ClaudeCapabilitiesProbe = {
    */
   readonly apiProvider: string | undefined;
   readonly slashCommands: ReadonlyArray<ServerProviderSlashCommand>;
+  readonly skills: ReadonlyArray<ServerProviderSkill>;
 };
 
 function parseClaudeInitializationCommands(
@@ -602,47 +609,67 @@ const probeClaudeCapabilities = (
 ) => {
   const abort = new AbortController();
   return Effect.gen(function* () {
+    const path = yield* Path.Path;
     const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
     const executablePath = yield* resolveClaudeSdkExecutablePath(
       claudeSettings.binaryPath,
       claudeEnvironment,
     );
-    return yield* Effect.tryPromise(async () => {
-      const q = claudeQuery({
-        // Never yield — we only need initialization data, not a conversation.
-        // This prevents any prompt from reaching the Anthropic API.
-        // oxlint-disable-next-line require-yield
-        prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
-          await waitForAbortSignal(abort.signal);
-        })(),
-        options: {
-          persistSession: false,
-          pathToClaudeCodeExecutable: executablePath,
-          abortController: abort,
-          settingSources: ["user", "project", "local"],
-          allowedTools: [],
-          env: claudeEnvironment,
-          ...(cwd ? { cwd } : {}),
-          stderr: () => {},
-        },
-      });
-      const init = await q.initializationResult();
-      const account = init.account as
-        | {
-            readonly email?: string;
-            readonly subscriptionType?: string;
-            readonly tokenSource?: string;
-            readonly apiProvider?: string;
-          }
-        | undefined;
-      return {
-        email: account?.email,
-        subscriptionType: account?.subscriptionType,
-        tokenSource: account?.tokenSource,
-        apiProvider: account?.apiProvider,
-        slashCommands: parseClaudeInitializationCommands(init.commands),
-      } satisfies ClaudeCapabilitiesProbe;
+    // The effective config dir is `~/.claude` for the default home, or the
+    // configured home path itself (exported as CLAUDE_CONFIG_DIR).
+    const claudeConfigDir =
+      claudeSettings.homePath.trim().length > 0
+        ? yield* resolveClaudeHomePath(claudeSettings)
+        : path.join(NodeOS.homedir(), ".claude");
+    const q = claudeQuery({
+      // Never yield — we only need initialization data, not a conversation.
+      // This prevents any prompt from reaching the Anthropic API.
+      // oxlint-disable-next-line require-yield
+      prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
+        await waitForAbortSignal(abort.signal);
+      })(),
+      options: {
+        persistSession: false,
+        pathToClaudeCodeExecutable: executablePath,
+        abortController: abort,
+        settingSources: ["user", "project", "local"],
+        allowedTools: [],
+        env: claudeEnvironment,
+        ...(cwd ? { cwd } : {}),
+        stderr: () => {},
+      },
     });
+    const init = yield* Effect.tryPromise(() => q.initializationResult());
+    // `reloadSkills` is best-effort: older CLIs may not answer the control
+    // request (and the SDK never times it out), so bound it ourselves and fall
+    // back to an empty skill list rather than failing the whole probe.
+    const reloadedSkills = yield* Effect.tryPromise(() => q.reloadSkills()).pipe(
+      Effect.map((reloaded) => reloaded.skills),
+      Effect.timeoutOption(SKILLS_RELOAD_TIMEOUT_MS),
+      Effect.orElseSucceed(() => Option.none<ReadonlyArray<ClaudeSlashCommand>>()),
+      Effect.map(Option.getOrElse(() => [] as ReadonlyArray<ClaudeSlashCommand>)),
+    );
+    const skills = parseClaudeReloadedSkills(reloadedSkills, {
+      claudeConfigDir,
+      cwd,
+      pathExists: pathExistsSync,
+    });
+    const account = init.account as
+      | {
+          readonly email?: string;
+          readonly subscriptionType?: string;
+          readonly tokenSource?: string;
+          readonly apiProvider?: string;
+        }
+      | undefined;
+    return {
+      email: account?.email,
+      subscriptionType: account?.subscriptionType,
+      tokenSource: account?.tokenSource,
+      apiProvider: account?.apiProvider,
+      slashCommands: parseClaudeInitializationCommands(init.commands),
+      skills,
+    } satisfies ClaudeCapabilitiesProbe;
   }).pipe(
     Effect.ensuring(
       Effect.sync(() => {
@@ -795,6 +822,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     : undefined;
   const slashCommands = capabilities?.slashCommands ?? [];
   const dedupedSlashCommands = dedupeSlashCommands(slashCommands);
+  const skills = capabilities?.skills ?? [];
 
   if (!capabilities) {
     return buildServerProvider({
@@ -803,6 +831,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
       checkedAt,
       models,
       slashCommands: dedupedSlashCommands,
+      skills,
       probe: {
         installed: true,
         version: parsedVersion,
@@ -824,6 +853,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     checkedAt,
     models,
     slashCommands: dedupedSlashCommands,
+    skills,
     probe: {
       installed: true,
       version: parsedVersion,
