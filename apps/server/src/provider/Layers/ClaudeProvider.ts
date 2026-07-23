@@ -503,6 +503,16 @@ type ClaudeCapabilitiesProbeTimeouts = {
   readonly skillsReloadMs?: number;
 };
 
+function resolveClaudeEnvironmentHomePath(
+  environment: NodeJS.ProcessEnv,
+  fallbackHomePath = NodeOS.homedir(),
+): string {
+  // HOME is the POSIX home variable and is also intentionally honored when a
+  // caller supplies it cross-platform; USERPROFILE covers the normal Windows
+  // environment when HOME is absent.
+  return environment.HOME ?? environment.USERPROFILE ?? fallbackHomePath;
+}
+
 function nonEmptyProbeString(value: string): string | undefined {
   const candidate = value.trim();
   return candidate ? candidate : undefined;
@@ -626,7 +636,7 @@ const probeClaudeCapabilities = (
     // an inherited CLAUDE_CONFIG_DIR remains effective when homePath is empty.
     const claudeConfigDir = environmentConfigDir
       ? path.resolve(cwd ?? process.cwd(), environmentConfigDir)
-      : path.join(NodeOS.homedir(), ".claude");
+      : path.join(resolveClaudeEnvironmentHomePath(claudeEnvironment), ".claude");
     const q = claudeQuery({
       // Never yield — we only need initialization data, not a conversation.
       // This prevents any prompt from reaching the Anthropic API.
@@ -920,4 +930,4 @@ export const makePendingClaudeProvider = (
     });
   });
 
-export { probeClaudeCapabilities };
+export { probeClaudeCapabilities, resolveClaudeEnvironmentHomePath };
