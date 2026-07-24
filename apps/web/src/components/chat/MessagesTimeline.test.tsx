@@ -269,6 +269,13 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('aria-label="Collapse all"');
     expect(markup).toContain('aria-label="View diff"');
     expect(markup).toContain("1 changed file");
+    const cardClass = markup.match(/class="([^"]*mt-4 rounded-2xl[^"]*)"/)?.[1];
+    const headerClass = markup.match(/class="([^"]*sticky top-2[^"]*)"/)?.[1];
+
+    expect(cardClass).toBeDefined();
+    expect(headerClass).toBeDefined();
+    expect(cardClass).not.toContain("dark:bg-input/32");
+    expect(headerClass).not.toContain("dark:bg-[color-mix");
   });
 
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {

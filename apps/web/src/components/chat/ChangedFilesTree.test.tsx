@@ -5,6 +5,27 @@ import { describe, expect, it } from "vite-plus/test";
 import { ChangedFilesCard, ChangedFilesTree } from "./ChangedFilesTree";
 
 describe("ChangedFilesCard", () => {
+  it("keeps the dark surface uniform across the rounded card", () => {
+    const markup = renderToStaticMarkup(
+      <ChangedFilesCard
+        turnId={TurnId.make("turn-1")}
+        files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
+        allDirectoriesExpanded
+        resolvedTheme="dark"
+        onToggleAllDirectories={() => {}}
+        onOpenTurnDiff={() => {}}
+      />,
+    );
+
+    const cardClass = markup.match(/class="([^"]*mt-4 rounded-2xl[^"]*)"/)?.[1];
+    const headerClass = markup.match(/class="([^"]*sticky top-0[^"]*)"/)?.[1];
+
+    expect(cardClass).toBeDefined();
+    expect(headerClass).toBeDefined();
+    expect(cardClass).not.toContain("dark:bg-input/32");
+    expect(headerClass).not.toContain("dark:bg-[color-mix");
+  });
+
   it("keeps its compact header sticky while preserving singular labels", () => {
     const markup = renderToStaticMarkup(
       <ChangedFilesCard
