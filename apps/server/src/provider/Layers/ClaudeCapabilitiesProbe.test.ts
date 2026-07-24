@@ -7,9 +7,38 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
-import { probeClaudeCapabilities, resolveClaudeEnvironmentHomePath } from "./ClaudeProvider.ts";
+import {
+  buildClaudeCapabilitiesProbeQueryOptions,
+  CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES,
+  probeClaudeCapabilities,
+  resolveClaudeEnvironmentHomePath,
+} from "./ClaudeProvider.ts";
 
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
+
+it("isolates Claude capability probes without dropping workspace setting sources", () => {
+  const abortController = new AbortController();
+  const options = buildClaudeCapabilitiesProbeQueryOptions({
+    executablePath: "/usr/bin/claude",
+    abortController,
+    environment: {
+      HOME: "/home/user",
+      ENABLE_CLAUDEAI_MCP_SERVERS: "true",
+    },
+    cwd: "/workspace/project",
+  });
+
+  assert.deepEqual(options.mcpServers, {});
+  assert.equal(options.strictMcpConfig, true);
+  assert.equal(options.cwd, "/workspace/project");
+  assert.deepEqual(options.settingSources, [...CLAUDE_CAPABILITIES_PROBE_SETTING_SOURCES]);
+  assert.deepEqual(options.allowedTools, []);
+  assert.equal(options.persistSession, false);
+  assert.equal(options.pathToClaudeCodeExecutable, "/usr/bin/claude");
+  assert.equal(options.abortController, abortController);
+  assert.equal(options.env?.HOME, "/home/user");
+  assert.equal(options.env?.ENABLE_CLAUDEAI_MCP_SERVERS, "false");
+});
 
 it("derives the child home with HOME then USERPROFILE precedence", () => {
   assert.equal(
@@ -30,7 +59,7 @@ it("derives the child home with HOME then USERPROFILE precedence", () => {
 });
 
 it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
-  it.effect("keeps core capabilities independent from skill discovery", () =>
+  it.effect("serializes probe options and keeps core capabilities independent from skills", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -189,8 +218,15 @@ it.layer(NodeServices.layer)("Claude capability probe SDK boundary", (it) => {
       const invocation = JSON.parse(yield* fs.readFileString(invocationPath)) as {
         readonly args: ReadonlyArray<string>;
         readonly cwd: string;
+        readonly connectorEnv: string;
+        readonly mcpConfig: unknown;
       };
       assert.equal(invocation.cwd, yield* fs.realPath(workspaceCwd));
+      assert.equal(invocation.connectorEnv, "false");
+      assert.equal(invocation.args.includes("--strict-mcp-config"), true);
+      assert.equal(invocation.args.includes("--mcp-config"), false);
+      assert.equal(invocation.mcpConfig, undefined);
+
       assert.equal(invocation.args.includes("--setting-sources=user,project,local"), true);
     }).pipe(Effect.scoped),
   );
