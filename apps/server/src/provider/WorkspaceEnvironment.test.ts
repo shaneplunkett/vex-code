@@ -271,12 +271,13 @@ describe("WorkspaceEnvironment", () => {
       readFile,
     });
 
-    return manager.inheritApproval({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+    return manager.prepareWorktree({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
       Effect.map((inherited) => {
         expect(inherited).toBe(true);
         expect(readFile.mock.calls.map(([path]) => path)).toEqual([
           "/project/.envrc",
           "/worktree/.envrc",
+          "/project/.envrc",
         ]);
         expect(run).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -284,6 +285,124 @@ describe("WorkspaceEnvironment", () => {
             cwd: "/worktree",
           }),
         );
+      }),
+    );
+  });
+
+  it.effect(
+    "copies an approved ignored .envrc into a new worktree before inheriting approval",
+    () =>
+      Effect.acquireUseRelease(
+        Effect.sync(() => {
+          const directory = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-direnv-copy-"));
+          const sourceCwd = NodePath.join(directory, "project");
+          const targetCwd = NodePath.join(directory, "worktree");
+          NodeFS.mkdirSync(sourceCwd);
+          NodeFS.mkdirSync(targetCwd);
+          NodeFS.writeFileSync(NodePath.join(sourceCwd, ".envrc"), "use flake\n", { mode: 0o600 });
+          return { directory, sourceCwd, targetCwd };
+        }),
+        ({ sourceCwd, targetCwd }) =>
+          Effect.gen(function* () {
+            const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>((input) => {
+              if (input.command === "/bin/git") {
+                return Effect.succeed(output({ code: 0 }));
+              }
+              return Effect.succeed(output({ stdout: JSON.stringify({ READY: "yes" }) }));
+            });
+            const manager = makeWorkspaceEnvironmentManagerWithRunner({
+              baseEnvironment: { PATH: "/base" },
+              direnvCommand: "/bin/direnv",
+              gitCommand: "/bin/git",
+              run,
+            });
+
+            const prepared = yield* manager.prepareWorktree({ sourceCwd, targetCwd });
+
+            expect(prepared).toBe(true);
+            expect(NodeFS.readFileSync(NodePath.join(targetCwd, ".envrc"), "utf8")).toBe(
+              "use flake\n",
+            );
+            expect(NodeFS.statSync(NodePath.join(targetCwd, ".envrc")).mode & 0o777).toBe(0o600);
+            expect(run.mock.calls.map(([input]) => [input.command, input.args, input.cwd])).toEqual(
+              [
+                ["/bin/direnv", ["export", "json"], sourceCwd],
+                ["/bin/git", ["check-ignore", "--quiet", "--", ".envrc"], sourceCwd],
+                ["/bin/git", ["check-ignore", "--quiet", "--", ".envrc"], targetCwd],
+                ["/bin/direnv", ["allow", NodePath.join(targetCwd, ".envrc")], targetCwd],
+                ["/bin/direnv", ["export", "json"], targetCwd],
+              ],
+            );
+          }),
+        ({ directory }) =>
+          Effect.sync(() => NodeFS.rmSync(directory, { recursive: true, force: true })),
+      ),
+  );
+
+  it.effect("does not copy a missing worktree .envrc when the source file is not ignored", () => {
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>((input) =>
+      Effect.succeed(
+        input.command === "/bin/git"
+          ? output({ code: 1 })
+          : output({ stdout: JSON.stringify({ READY: "yes" }) }),
+      ),
+    );
+    const readFile = vi.fn<(path: string) => Promise<Uint8Array>>((path) =>
+      path.startsWith("/project")
+        ? Promise.resolve(new TextEncoder().encode("use flake\n"))
+        : Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" })),
+    );
+    const writeFile = vi.fn(() => Promise.resolve());
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      gitCommand: "/bin/git",
+      run,
+      readFile,
+      writeFile,
+    });
+
+    return manager.prepareWorktree({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+      Effect.map((prepared) => {
+        expect(prepared).toBe(false);
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(run).toHaveBeenCalledTimes(2);
+      }),
+    );
+  });
+
+  it.effect("does not copy when the target branch would expose the ignored source .envrc", () => {
+    const run = vi.fn<ProcessRunner.ProcessRunner["Service"]["run"]>((input) =>
+      Effect.succeed(
+        input.command === "/bin/git"
+          ? output({ code: input.cwd === "/project" ? 0 : 1 })
+          : output({ stdout: JSON.stringify({ READY: "yes" }) }),
+      ),
+    );
+    const readFile = vi.fn<(path: string) => Promise<Uint8Array>>((path) =>
+      path.startsWith("/project")
+        ? Promise.resolve(new TextEncoder().encode("use flake\n"))
+        : Promise.reject(Object.assign(new Error("missing"), { code: "ENOENT" })),
+    );
+    const writeFile = vi.fn(() => Promise.resolve());
+    const manager = makeWorkspaceEnvironmentManagerWithRunner({
+      baseEnvironment: { PATH: "/base" },
+      direnvCommand: "/bin/direnv",
+      gitCommand: "/bin/git",
+      run,
+      readFile,
+      writeFile,
+    });
+
+    return manager.prepareWorktree({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+      Effect.map((prepared) => {
+        expect(prepared).toBe(false);
+        expect(writeFile).not.toHaveBeenCalled();
+        expect(run.mock.calls.map(([input]) => [input.command, input.cwd])).toEqual([
+          ["/bin/direnv", "/project"],
+          ["/bin/git", "/project"],
+          ["/bin/git", "/worktree"],
+        ]);
       }),
     );
   });
@@ -304,7 +423,7 @@ describe("WorkspaceEnvironment", () => {
       readFile,
     });
 
-    return manager.inheritApproval({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
+    return manager.prepareWorktree({ sourceCwd: "/project", targetCwd: "/worktree" }).pipe(
       Effect.map((inherited) => {
         expect(inherited).toBe(false);
         expect(run).toHaveBeenCalledTimes(1);

@@ -64,7 +64,7 @@ export interface WorkspaceEnvironmentManager {
   readonly allow: (
     cwd: string,
   ) => Effect.Effect<WorkspaceEnvironmentStatus, WorkspaceEnvironmentError>;
-  readonly inheritApproval: (input: {
+  readonly prepareWorktree: (input: {
     readonly sourceCwd: string;
     readonly targetCwd: string;
   }) => Effect.Effect<boolean, WorkspaceEnvironmentError>;
@@ -91,8 +91,17 @@ interface WorkspaceEnvironmentResolverOptions {
 
 interface WorkspaceEnvironmentRunnerOptions extends WorkspaceEnvironmentResolverOptions {
   readonly direnvCommand: string | null;
+  readonly gitCommand?: string | null;
   readonly run: ProcessRunner.ProcessRunner["Service"]["run"];
   readonly readFile?: (path: string) => Promise<Uint8Array>;
+  readonly stat?: (
+    path: string,
+  ) => Promise<{ readonly mode: number; readonly isFile: () => boolean }>;
+  readonly writeFile?: (
+    path: string,
+    data: Uint8Array,
+    options: { readonly flag: "wx"; readonly mode: number },
+  ) => Promise<void>;
 }
 
 function applyDirenvExport(
@@ -161,7 +170,10 @@ export function makeWorkspaceEnvironmentManagerWithRunner(
   );
 
   const direnvCommand = options.direnvCommand;
+  const gitCommand = options.gitCommand ?? null;
   const readFile = options.readFile ?? NodeFSP.readFile;
+  const stat = options.stat ?? NodeFSP.stat;
+  const writeFile = options.writeFile ?? NodeFSP.writeFile;
   if (direnvCommand === null) {
     const resolve = Effect.fn("WorkspaceEnvironmentResolver.fallback")(() =>
       Effect.succeed({ ...fallbackEnvironment }),
@@ -174,7 +186,7 @@ export function makeWorkspaceEnvironmentManagerWithRunner(
       allow: Effect.fn("WorkspaceEnvironmentManager.allowInactive")(() =>
         Effect.succeed({ _tag: "inactive" as const }),
       ),
-      inheritApproval: Effect.fn("WorkspaceEnvironmentManager.inheritInactive")(() =>
+      prepareWorktree: Effect.fn("WorkspaceEnvironmentManager.prepareInactive")(() =>
         Effect.succeed(false),
       ),
     };
@@ -286,19 +298,123 @@ export function makeWorkspaceEnvironmentManagerWithRunner(
     return confirmed;
   });
 
-  const inheritApproval = Effect.fn("WorkspaceEnvironmentManager.inheritApproval")(
+  const readOptionalEnvrc = Effect.fn("WorkspaceEnvironmentManager.readOptionalEnvrc")(function* (
+    cwd: string,
+    envrcPath: string,
+  ) {
+    return yield* Effect.tryPromise({
+      try: async () => {
+        try {
+          return Option.some(await readFile(envrcPath));
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code === "ENOENT") return Option.none();
+          throw cause;
+        }
+      },
+      catch: (cause) =>
+        new WorkspaceEnvironmentError({
+          cwd,
+          detail: "The workspace .envrc could not be read.",
+          cause,
+        }),
+    });
+  });
+
+  const isEnvrcIgnored = Effect.fn("WorkspaceEnvironmentManager.isEnvrcIgnored")(function* (
+    cwd: string,
+  ) {
+    if (gitCommand === null) return false;
+    const output = yield* options
+      .run({
+        command: gitCommand,
+        args: ["check-ignore", "--quiet", "--", ".envrc"],
+        cwd,
+        env: baseEnvironment,
+        maxOutputBytes: DIRENV_EXPORT_MAX_OUTPUT_BYTES,
+        timeout: DIRENV_EXPORT_TIMEOUT,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new WorkspaceEnvironmentError({
+              cwd,
+              detail: "Git could not inspect the workspace .envrc ignore state.",
+              cause,
+            }),
+        ),
+      );
+    if (output.code === 0) return true;
+    if (output.code === 1) return false;
+    return yield* new WorkspaceEnvironmentError({
+      cwd,
+      detail: "Git could not inspect the workspace .envrc ignore state.",
+    });
+  });
+
+  const prepareWorktree = Effect.fn("WorkspaceEnvironmentManager.prepareWorktree")(
     function* (input: { readonly sourceCwd: string; readonly targetCwd: string }) {
+      const sourceEnvrcPath = NodePath.join(input.sourceCwd, ".envrc");
+      const targetEnvrcPath = NodePath.join(input.targetCwd, ".envrc");
+      const sourceEnvrc = yield* readOptionalEnvrc(input.sourceCwd, sourceEnvrcPath);
+      if (Option.isNone(sourceEnvrc)) return false;
+
       const sourceStatus = yield* inspect(input.sourceCwd);
       if (sourceStatus._tag !== "ready") return false;
 
-      const sourceEnvrcPath = NodePath.join(input.sourceCwd, ".envrc");
-      const targetEnvrcPath = NodePath.join(input.targetCwd, ".envrc");
-      const [sourceEnvrc, targetEnvrc] = yield* Effect.all([
-        Effect.tryPromise(() => readFile(sourceEnvrcPath)).pipe(Effect.option),
-        Effect.tryPromise(() => readFile(targetEnvrcPath)).pipe(Effect.option),
-      ]);
-      if (Option.isNone(sourceEnvrc) || Option.isNone(targetEnvrc)) return false;
-      if (!Buffer.from(sourceEnvrc.value).equals(Buffer.from(targetEnvrc.value))) return false;
+      let targetEnvrc = yield* readOptionalEnvrc(input.targetCwd, targetEnvrcPath);
+      if (Option.isNone(targetEnvrc)) {
+        if (!(yield* isEnvrcIgnored(input.sourceCwd))) return false;
+        if (!(yield* isEnvrcIgnored(input.targetCwd))) return false;
+
+        const sourceStat = yield* Effect.tryPromise({
+          try: () => stat(sourceEnvrcPath),
+          catch: (cause) =>
+            new WorkspaceEnvironmentError({
+              cwd: input.sourceCwd,
+              detail: "The approved source .envrc could not be inspected.",
+              cause,
+            }),
+        });
+        if (!sourceStat.isFile()) return false;
+
+        const created = yield* Effect.tryPromise({
+          try: async () => {
+            try {
+              await writeFile(targetEnvrcPath, sourceEnvrc.value, {
+                flag: "wx",
+                mode: sourceStat.mode & 0o777,
+              });
+              return true;
+            } catch (cause) {
+              if ((cause as NodeJS.ErrnoException).code === "EEXIST") return false;
+              throw cause;
+            }
+          },
+          catch: (cause) =>
+            new WorkspaceEnvironmentError({
+              cwd: input.targetCwd,
+              detail: "The approved source .envrc could not be copied into the worktree.",
+              cause,
+            }),
+        });
+
+        targetEnvrc = yield* readOptionalEnvrc(input.targetCwd, targetEnvrcPath);
+        if (Option.isNone(targetEnvrc)) {
+          if (created) {
+            return yield* new WorkspaceEnvironmentError({
+              cwd: input.targetCwd,
+              detail: "The copied worktree .envrc could not be verified.",
+            });
+          }
+          return false;
+        }
+      }
+
+      const verifiedSourceEnvrc = yield* readOptionalEnvrc(input.sourceCwd, sourceEnvrcPath);
+      if (Option.isNone(verifiedSourceEnvrc) || Option.isNone(targetEnvrc)) return false;
+      if (!Buffer.from(verifiedSourceEnvrc.value).equals(Buffer.from(targetEnvrc.value))) {
+        return false;
+      }
 
       yield* allowEnvrc(input.targetCwd, targetEnvrcPath);
       const targetStatus = yield* inspect(input.targetCwd);
@@ -312,7 +428,7 @@ export function makeWorkspaceEnvironmentManagerWithRunner(
     },
   );
 
-  return { resolve, inspect, allow, inheritApproval };
+  return { resolve, inspect, allow, prepareWorktree };
 }
 
 export function makeWorkspaceEnvironmentResolverWithRunner(
@@ -330,12 +446,16 @@ export const makeWorkspaceEnvironmentManager = Effect.fn("makeWorkspaceEnvironme
       // accidentally disable workspace environment loading.
       env: baseEnvironment,
     }).pipe(Effect.option);
+    const resolvedGitCommand = yield* resolveCommandPath("git", {
+      env: baseEnvironment,
+    }).pipe(Effect.option);
     const processRunner = yield* ProcessRunner.make();
 
     return makeWorkspaceEnvironmentManagerWithRunner({
       ...options,
       baseEnvironment,
       direnvCommand: Option.getOrNull(resolvedCommand),
+      gitCommand: Option.getOrNull(resolvedGitCommand),
       run: processRunner.run,
     });
   },

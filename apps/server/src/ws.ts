@@ -1041,7 +1041,7 @@ const makeWsRpcLayer = (
                 path: null,
               });
               targetWorktreePath = worktree.worktree.path;
-              yield* workspaceEnvironment.inheritApproval({
+              yield* workspaceEnvironment.prepareWorktree({
                 sourceCwd: bootstrap.prepareWorktree.projectCwd,
                 targetCwd: targetWorktreePath,
               });
@@ -1880,30 +1880,12 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.gitPreparePullRequestThread,
             gitWorkflow
-              .preparePullRequestThread(input)
-              .pipe(
-                Effect.tap((result) =>
-                  result.worktreePath
-                    ? workspaceEnvironment
-                        .inheritApproval({
-                          sourceCwd: input.cwd,
-                          targetCwd: result.worktreePath,
-                        })
-                        .pipe(
-                          Effect.catch((cause) =>
-                            Effect.logWarning(
-                              "Could not inherit direnv approval for pull request worktree",
-                              {
-                                sourceCwd: input.cwd,
-                                targetCwd: result.worktreePath,
-                                detail: cause.message,
-                              },
-                            ),
-                          ),
-                        )
-                    : Effect.void,
-                ),
-              )
+              .preparePullRequestThread(input, {
+                prepareWorktreeEnvironment: ({ sourceCwd, targetCwd }) =>
+                  workspaceEnvironment
+                    .prepareWorktree({ sourceCwd, targetCwd })
+                    .pipe(Effect.asVoid),
+              })
               .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "git" },
           ),
@@ -1917,13 +1899,13 @@ const makeWsRpcLayer = (
             gitWorkflow.createWorktree(input).pipe(
               Effect.tap((result) =>
                 workspaceEnvironment
-                  .inheritApproval({
+                  .prepareWorktree({
                     sourceCwd: input.cwd,
                     targetCwd: result.worktree.path,
                   })
                   .pipe(
                     Effect.catch((cause) =>
-                      Effect.logWarning("Could not inherit direnv approval for worktree", {
+                      Effect.logWarning("Could not prepare direnv environment for worktree", {
                         sourceCwd: input.cwd,
                         targetCwd: result.worktree.path,
                         detail: cause.message,

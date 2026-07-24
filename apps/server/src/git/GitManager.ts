@@ -61,6 +61,13 @@ export interface GitRunStackedActionOptions {
   readonly progressReporter?: GitActionProgressReporter;
 }
 
+export interface GitPreparePullRequestThreadOptions {
+  readonly prepareWorktreeEnvironment?: (input: {
+    readonly sourceCwd: string;
+    readonly targetCwd: string;
+  }) => Effect.Effect<void, { readonly message: string }>;
+}
+
 export class GitManager extends Context.Service<
   GitManager,
   {
@@ -82,6 +89,7 @@ export class GitManager extends Context.Service<
     ) => Effect.Effect<GitResolvePullRequestResult, GitManagerServiceError>;
     readonly preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
+      options?: GitPreparePullRequestThreadOptions,
     ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
     readonly runStackedAction: (
       input: GitRunStackedActionInput,
@@ -1650,7 +1658,7 @@ export const make = Effect.gen(function* () {
 
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
-  )(function* (input) {
+  )(function* (input, options) {
     const maybeRunSetupScript = (worktreePath: string) => {
       if (!input.threadId) {
         return Effect.void;
@@ -1671,6 +1679,27 @@ export const make = Effect.gen(function* () {
           ),
         );
     };
+    const prepareWorktreeEnvironment = Effect.fn(
+      "GitManager.preparePullRequestWorktreeEnvironment",
+    )(function* (worktreePath: string) {
+      if (!options?.prepareWorktreeEnvironment) return;
+      yield* options
+        .prepareWorktreeEnvironment({
+          sourceCwd: input.cwd,
+          targetCwd: worktreePath,
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new GitManagerError({
+                operation: "preparePullRequestThread",
+                cwd: input.cwd,
+                detail: "Could not prepare the pull request worktree environment.",
+                cause,
+              }),
+          ),
+        );
+    });
     return yield* Effect.gen(function* () {
       const normalizedReference = normalizePullRequestReference(input.reference);
       const rootWorktreePath = yield* canonicalizeExistingPath(input.cwd);
@@ -1758,6 +1787,7 @@ export const make = Effect.gen(function* () {
         existingBranchBeforeFetchPath !== rootWorktreePath
       ) {
         yield* ensureExistingWorktreeUpstream(existingBranchBeforeFetch.worktreePath);
+        yield* prepareWorktreeEnvironment(existingBranchBeforeFetch.worktreePath);
         return {
           pullRequest,
           branch: localPullRequestBranch,
@@ -1788,6 +1818,7 @@ export const make = Effect.gen(function* () {
         existingBranchAfterFetchPath !== rootWorktreePath
       ) {
         yield* ensureExistingWorktreeUpstream(existingBranchAfterFetch.worktreePath);
+        yield* prepareWorktreeEnvironment(existingBranchAfterFetch.worktreePath);
         return {
           pullRequest,
           branch: localPullRequestBranch,
@@ -1809,6 +1840,7 @@ export const make = Effect.gen(function* () {
         path: null,
       });
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);
+      yield* prepareWorktreeEnvironment(worktree.worktree.path);
       yield* maybeRunSetupScript(worktree.worktree.path);
 
       return {
