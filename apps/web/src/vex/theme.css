@@ -68,6 +68,58 @@
   --warning-foreground: #f9e2af;
 }
 
+/*
+ * Upstream scopes a complete neutral palette to each sidebar version so its
+ * two implementations stay visually aligned. Reapply Vex's semantic palette
+ * at that same seam: these local values must beat the scoped zinc/black
+ * defaults rather than relying on the lower-specificity :root tokens above.
+ */
+[data-sidebar-version="v1"],
+[data-sidebar-version="v2"] {
+  --background: #eff1f5;
+  --foreground: #4c4f69;
+  --card: #eff1f5;
+  --card-foreground: #4c4f69;
+  --accent: #ccd0da;
+  --accent-foreground: #4c4f69;
+  --muted: #dce0e8;
+  --muted-foreground: #6c6f85;
+  --border: color-mix(in srgb, #9ca0b0 55%, transparent);
+  --input: color-mix(in srgb, #9ca0b0 70%, transparent);
+  --sidebar: #e6e9ef;
+  --sidebar-foreground: #4c4f69;
+  --sidebar-muted-foreground: #6c6f85;
+  --sidebar-control-surface: #dce0e8;
+  --sidebar-row-hover: #dce0e8;
+  --sidebar-row-active: #ccd0da;
+  --sidebar-row-selected: #dce0e8;
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+}
+
+.dark [data-sidebar-version="v1"],
+.dark [data-sidebar-version="v2"] {
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --card: #1e1e2e;
+  --card-foreground: #cdd6f4;
+  --accent: #313244;
+  --accent-foreground: #cdd6f4;
+  --muted: #313244;
+  --muted-foreground: #a6adc8;
+  --border: color-mix(in srgb, #585b70 72%, transparent);
+  --input: color-mix(in srgb, #6c7086 72%, transparent);
+  --sidebar: #181825;
+  --sidebar-foreground: #cdd6f4;
+  --sidebar-muted-foreground: #a6adc8;
+  --sidebar-control-surface: #313244;
+  --sidebar-row-hover: #313244;
+  --sidebar-row-active: #45475a;
+  --sidebar-row-selected: #313244;
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+}
+
 pre,
 code {
   font-family: var(--font-mono);
