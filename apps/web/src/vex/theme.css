@@ -69,12 +69,34 @@
 }
 
 /*
- * Upstream scopes a complete neutral palette to each sidebar version so its
- * two implementations stay visually aligned. Reapply Vex's semantic palette
- * at that same seam: these local values must beat the scoped zinc/black
- * defaults rather than relying on the lower-specificity :root tokens above.
+ * Upstream scopes a complete neutral palette to each sidebar version. The
+ * legacy sidebar should retain Vex's original card/accent treatment, while V2
+ * uses its own surface hierarchy. Reapply both contracts at that seam so they
+ * beat the scoped zinc/black defaults rather than relying on :root specificity.
  */
 [data-sidebar-version="v1"],
+.dark [data-sidebar-version="v1"] {
+  --background: inherit;
+  --foreground: inherit;
+  --card: inherit;
+  --card-foreground: inherit;
+  --accent: inherit;
+  --accent-foreground: inherit;
+  --muted: inherit;
+  --muted-foreground: inherit;
+  --border: inherit;
+  --input: inherit;
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-muted-foreground: var(--muted-foreground);
+  --sidebar-control-surface: var(--accent);
+  --sidebar-row-hover: var(--accent);
+  --sidebar-row-active: var(--accent);
+  --sidebar-row-selected: var(--accent);
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+}
+
 [data-sidebar-version="v2"] {
   --background: #eff1f5;
   --foreground: #4c4f69;
@@ -97,7 +119,6 @@
   --sidebar-stage-fade: var(--sidebar);
 }
 
-.dark [data-sidebar-version="v1"],
 .dark [data-sidebar-version="v2"] {
   --background: #1e1e2e;
   --foreground: #cdd6f4;

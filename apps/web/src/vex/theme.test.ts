@@ -25,8 +25,19 @@ function cssRuleBody(marker: string): string {
 }
 
 describe("Vex sidebar theme", () => {
-  it("reapplies Catppuccin Latte over upstream's scoped sidebar palette", () => {
+  it("keeps the legacy sidebar on the original Vex surface semantics", () => {
     const rule = cssRuleBody('[data-sidebar-version="v1"]');
+
+    expect(rule).toContain("--background: inherit");
+    expect(rule).toContain("--sidebar: var(--card)");
+    expect(rule).toContain("--sidebar-row-hover: var(--accent)");
+    expect(rule).toContain("--sidebar-row-active: var(--accent)");
+    expect(rule).not.toContain("#e6e9ef");
+    expect(rule).not.toContain("zinc");
+  });
+
+  it("reapplies Catppuccin Latte over upstream's scoped sidebar v2 palette", () => {
+    const rule = cssRuleBody('[data-sidebar-version="v2"]');
 
     expect(rule).toContain("--sidebar: #e6e9ef");
     expect(rule).toContain("--sidebar-row-hover: #dce0e8");
@@ -34,8 +45,8 @@ describe("Vex sidebar theme", () => {
     expect(rule).not.toContain("zinc");
   });
 
-  it("reapplies Catppuccin Mocha over upstream's scoped dark sidebar palette", () => {
-    const rule = cssRuleBody('.dark [data-sidebar-version="v1"]');
+  it("reapplies Catppuccin Mocha over upstream's scoped dark sidebar v2 palette", () => {
+    const rule = cssRuleBody('.dark [data-sidebar-version="v2"]');
 
     expect(rule).toContain("--sidebar: #181825");
     expect(rule).toContain("--sidebar-row-hover: #313244");
