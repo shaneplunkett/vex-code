@@ -11,10 +11,12 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ServerProvider,
   ThreadId,
   type ModelSelection,
   type ProviderOptionSelection,
 } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 
 // The composer draft's `modelSelectionByProvider` and
@@ -60,6 +62,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import {
   COMPOSER_DRAFT_STORAGE_KEY,
   clearComposerDraftsEnvironment,
+  deriveEffectiveComposerModelState,
   finalizePromotedDraftThreadByRef,
   markPromotedDraftThread,
   markPromotedDraftThreadByRef,
@@ -146,6 +149,27 @@ function providerModelOptions(
   options: Partial<Record<string, Record<string, string | boolean | undefined>>>,
 ): ProviderOptionSelectionsByProvider {
   return selectionsByProvider(options);
+}
+
+function codexProvider(models: ReadonlyArray<string>): ServerProvider {
+  return {
+    instanceId: CODEX_INSTANCE,
+    driver: CODEX_DRIVER,
+    enabled: true,
+    installed: true,
+    version: null,
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-07-27T00:00:00.000Z",
+    models: models.map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      capabilities: {},
+    })),
+    slashCommands: [],
+    skills: [],
+  };
 }
 
 const TEST_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
@@ -1576,6 +1600,56 @@ describe("composerDraftStore sticky composer settings", () => {
       },
       activeProvider: "claudeAgent",
     });
+  });
+
+  it("restores sticky traits when a reopened thread has no composer draft", () => {
+    const providers = [codexProvider(["gpt-5.6-sol"])];
+
+    const result = deriveEffectiveComposerModelState({
+      draft: null,
+      stickyModelSelectionByProvider: {
+        [CODEX_INSTANCE]: modelSelection(CODEX_DRIVER, "gpt-5.6-sol", {
+          reasoningEffort: "high",
+          serviceTier: "default",
+        }),
+      },
+      providers,
+      selectedProvider: CODEX_DRIVER,
+      selectedInstanceId: CODEX_INSTANCE,
+      threadModelSelection: modelSelection(CODEX_DRIVER, "gpt-5.6-sol"),
+      projectModelSelection: null,
+      settings: DEFAULT_UNIFIED_SETTINGS,
+    });
+
+    expect(result.modelOptions?.[CODEX_INSTANCE]).toEqual(
+      toSelections({
+        reasoningEffort: "high",
+        serviceTier: "default",
+      }),
+    );
+  });
+
+  it("keeps thread traits ahead of sticky traits after reopening", () => {
+    const providers = [codexProvider(["gpt-5.6-sol"])];
+
+    const result = deriveEffectiveComposerModelState({
+      draft: null,
+      stickyModelSelectionByProvider: {
+        [CODEX_INSTANCE]: modelSelection(CODEX_DRIVER, "gpt-5.6-sol", {
+          reasoningEffort: "high",
+        }),
+      },
+      providers,
+      selectedProvider: CODEX_DRIVER,
+      selectedInstanceId: CODEX_INSTANCE,
+      threadModelSelection: modelSelection(CODEX_DRIVER, "gpt-5.6-sol", {
+        reasoningEffort: "max",
+      }),
+      projectModelSelection: null,
+      settings: DEFAULT_UNIFIED_SETTINGS,
+    });
+
+    expect(result.modelOptions?.[CODEX_INSTANCE]).toEqual(toSelections({ reasoningEffort: "max" }));
   });
 });
 
