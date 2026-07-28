@@ -173,7 +173,7 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "../logicalProject";
-import { buildDraftThreadRouteParams } from "../threadRoutes";
+import { buildDraftThreadRouteParams, resolveServerThreadSubscriptionRef } from "../threadRoutes";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -617,8 +617,15 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
   const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
-  const serverThread = useThread(threadRef);
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
+  const serverThreadShell = useThreadShell(threadRef);
+  const serverThread = useThread(
+    resolveServerThreadSubscriptionRef({
+      routeKind: draftThread === null ? "server" : "draft",
+      routeThreadRef: threadRef,
+      serverThreadShellExists: serverThreadShell !== null,
+    }),
+  );
   const projectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
     : draftThread
@@ -973,8 +980,15 @@ const PersistentThreadTerminalPanel = memo(function PersistentThreadTerminalPane
   newShortcutLabel,
   closeShortcutLabel,
 }: PersistentThreadTerminalPanelProps) {
-  const serverThread = useThread(threadRef);
   const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
+  const serverThreadShell = useThreadShell(threadRef);
+  const serverThread = useThread(
+    resolveServerThreadSubscriptionRef({
+      routeKind: draftThread === null ? "server" : "draft",
+      routeThreadRef: threadRef,
+      serverThreadShellExists: serverThreadShell !== null,
+    }),
+  );
   const projectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
     : draftThread
@@ -1184,7 +1198,14 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const composerDraftTarget: ScopedThreadRef | DraftId =
     routeKind === "server" ? routeThreadRef : props.draftId;
-  const serverThread = useThread(routeThreadRef);
+  const routeThreadShell = useThreadShell(routeThreadRef);
+  const serverThread = useThread(
+    resolveServerThreadSubscriptionRef({
+      routeKind,
+      routeThreadRef,
+      serverThreadShellExists: routeThreadShell !== null,
+    }),
+  );
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
   const activeThreadLastVisitedAt = useUiStateStore(
     (store) => store.threadLastVisitedAtById[routeThreadKey],

@@ -7,12 +7,44 @@ import {
   buildDraftThreadRouteParams,
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
+  resolveServerThreadSubscriptionRef,
   resolveThreadRouteRenderState,
   resolveThreadRouteRef,
   resolveThreadRouteTarget,
 } from "./threadRoutes";
 
 describe("threadRoutes", () => {
+  it("does not subscribe a local draft before the server shell materialises it", () => {
+    const routeThreadRef = scopeThreadRef("env-1" as never, ThreadId.make("thread-1"));
+
+    expect(
+      resolveServerThreadSubscriptionRef({
+        routeKind: "draft",
+        routeThreadRef,
+        serverThreadShellExists: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("subscribes canonical routes and promoted drafts", () => {
+    const routeThreadRef = scopeThreadRef("env-1" as never, ThreadId.make("thread-1"));
+
+    expect(
+      resolveServerThreadSubscriptionRef({
+        routeKind: "server",
+        routeThreadRef,
+        serverThreadShellExists: false,
+      }),
+    ).toBe(routeThreadRef);
+    expect(
+      resolveServerThreadSubscriptionRef({
+        routeKind: "draft",
+        routeThreadRef,
+        serverThreadShellExists: true,
+      }),
+    ).toBe(routeThreadRef);
+  });
+
   it("builds canonical thread route params from a scoped ref", () => {
     const ref = scopeThreadRef("env-1" as never, ThreadId.make("thread-1"));
 

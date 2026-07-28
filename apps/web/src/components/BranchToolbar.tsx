@@ -12,7 +12,12 @@ import {
 import { memo, useCallback, useMemo } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
+import {
+  useProject,
+  useThread,
+  useThreadShell,
+  useThreadShellsForProjectRefs,
+} from "../state/entities";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   type EnvMode,
@@ -40,6 +45,7 @@ import {
   MenuTrigger,
 } from "./ui/menu";
 import { Separator } from "./ui/separator";
+import { resolveServerThreadSubscriptionRef } from "../threadRoutes";
 
 interface BranchToolbarProps {
   environmentId: EnvironmentId;
@@ -234,9 +240,16 @@ export const BranchToolbar = memo(function BranchToolbar({
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
   );
-  const serverThread = useThread(threadRef);
   const draftThread = useComposerDraftStore((store) =>
     draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
+  );
+  const serverThreadShell = useThreadShell(threadRef);
+  const serverThread = useThread(
+    resolveServerThreadSubscriptionRef({
+      routeKind: draftId !== undefined || draftThread !== null ? "draft" : "server",
+      routeThreadRef: threadRef,
+      serverThreadShellExists: serverThreadShell !== null,
+    }),
   );
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const activeProjectRef = serverThread
