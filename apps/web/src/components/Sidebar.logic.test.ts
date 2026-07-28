@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   archiveSelectedThreadEntries,
+  buildConfirmedProjectDeleteInput,
   buildMultiSelectThreadContextMenuItems,
   createThreadJumpHintVisibilityController,
   getSidebarThreadIdsToPrewarm,
@@ -93,6 +94,15 @@ describe("shouldNavigateAfterProjectRemoval", () => {
         projectDraftId: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("buildConfirmedProjectDeleteInput", () => {
+  it("forces removal even when the active shell snapshot contains no threads", () => {
+    expect(buildConfirmedProjectDeleteInput("project-1")).toEqual({
+      projectId: "project-1",
+      force: true,
+    });
   });
 });
 

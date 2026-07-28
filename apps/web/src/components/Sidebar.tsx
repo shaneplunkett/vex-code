@@ -171,6 +171,7 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { openCommandPalette } from "../commandPaletteBus";
 import {
   archiveSelectedThreadEntries,
+  buildConfirmedProjectDeleteInput,
   buildMultiSelectThreadContextMenuItems,
   getSidebarThreadIdsToPrewarm,
   resolveAdjacentThreadId,
@@ -1426,14 +1427,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   );
 
   const removeProject = useCallback(
-    async (member: SidebarProjectGroupMember, options: { force?: boolean } = {}) => {
+    async (member: SidebarProjectGroupMember) => {
       const memberProjectRef = scopeProjectRef(member.environmentId, member.id);
       const result = await deleteProject({
         environmentId: member.environmentId,
-        input: {
-          projectId: member.id,
-          ...(options.force === true ? { force: true } : {}),
-        },
+        input: buildConfirmedProjectDeleteInput(member.id),
       });
       if (result._tag === "Failure") {
         return result;
@@ -1491,7 +1489,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                           ...(member.environmentLabel
                             ? [`Environment: ${member.environmentLabel}`]
                             : []),
-                          "This permanently clears conversation history for those threads.",
+                          "This permanently clears all conversation history still stored for this project.",
                           "This removes only this project entry.",
                           "This action cannot be undone.",
                         ].join("\n")
@@ -1501,6 +1499,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                           ...(member.environmentLabel
                             ? [`Environment: ${member.environmentLabel}`]
                             : []),
+                          "This permanently clears any conversation history still stored for this project.",
                           "This removes only this project entry.",
                         ].join("\n"),
                   );
@@ -1508,7 +1507,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                     return;
                   }
 
-                  const result = await removeProject(member, { force: true });
+                  const result = await removeProject(member);
                   if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
                     const error = squashAtomCommandFailure(result);
                     toastManager.add(
@@ -1549,6 +1548,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         `Remove project "${member.title}"?`,
         `Path: ${member.workspaceRoot}`,
         ...(member.environmentLabel ? [`Environment: ${member.environmentLabel}`] : []),
+        "This permanently clears any conversation history still stored for this project.",
         "This removes only this project entry.",
       ].join("\n");
       const confirmed = await api.dialogs.confirm(message);

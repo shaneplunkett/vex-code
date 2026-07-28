@@ -101,6 +101,7 @@ import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat"
 import type { SidebarThreadSummary } from "../types";
 import { cn } from "~/lib/utils";
 import {
+  buildConfirmedProjectDeleteInput,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
   hasUnseenCompletion,
@@ -1227,7 +1228,9 @@ export default function SidebarV2() {
                         : []),
                     ]
                   : [`This removes ${members.length} grouped project entries.`]),
-                "This permanently clears conversation history for those threads.",
+                singleMember
+                  ? "This permanently clears all conversation history still stored for this project."
+                  : "This permanently clears all conversation history still stored for these projects.",
                 isWholeGroup
                   ? "This removes only the project entries, not the files on disk."
                   : "Other entries in this grouped project are unaffected.",
@@ -1243,6 +1246,9 @@ export default function SidebarV2() {
                         : []),
                     ]
                   : [`This removes ${members.length} grouped project entries.`]),
+                singleMember
+                  ? "This permanently clears any conversation history still stored for this project."
+                  : "This permanently clears any conversation history still stored for these projects.",
                 isWholeGroup
                   ? "This removes only the project entries, not the files on disk."
                   : "Other entries in this grouped project are unaffected.",
@@ -1268,10 +1274,7 @@ export default function SidebarV2() {
 
         const result = await deleteProject({
           environmentId: project.environmentId,
-          input: {
-            projectId: project.id,
-            ...(memberThreads.length > 0 ? { force: true } : {}),
-          },
+          input: buildConfirmedProjectDeleteInput(project.id),
         });
         if (result._tag === "Failure") {
           if (!isAtomCommandInterrupted(result)) {

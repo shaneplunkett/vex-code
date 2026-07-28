@@ -351,6 +351,18 @@ export function shouldNavigateAfterProjectRemoval(input: {
   );
 }
 
+/**
+ * Confirmed project removals must force the server-side cascade. The active
+ * shell snapshot omits archived threads and can briefly lag new threads, so it
+ * cannot prove that a project is empty.
+ */
+export function buildConfirmedProjectDeleteInput<TProjectId>(projectId: TProjectId): {
+  projectId: TProjectId;
+  force: true;
+} {
+  return { projectId, force: true };
+}
+
 export function isContextMenuPointerDown(input: {
   button: number;
   ctrlKey: boolean;
