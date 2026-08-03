@@ -8,7 +8,8 @@ import { pipe } from "effect/Function";
 import type { ResolvedMobileCodeSurface } from "../../lib/appearancePreferences";
 import { resolveMobileCodeSurface } from "../../lib/appearancePreferences";
 import { MOBILE_CODE_SURFACE } from "../../lib/typography";
-import { getPierreTerminalTheme, type TerminalAppearanceScheme } from "../terminal/terminalTheme";
+import type { TerminalAppearanceScheme } from "../terminal/terminalTheme";
+import { resolveVexMobileReviewDiffTheme } from "../../vex/codeTheme";
 import { computeWordAltDiffRanges } from "./reviewWordDiffs";
 import {
   getReviewFilePreviewState,
@@ -113,46 +114,7 @@ function buildReviewCommentsCacheKey(comments: ReadonlyArray<ReviewInlineComment
 export function createNativeReviewDiffTheme(
   scheme: TerminalAppearanceScheme,
 ): NativeReviewDiffTheme {
-  const terminalTheme = getPierreTerminalTheme(scheme);
-  const [, terminalRed, , , terminalBlue] = terminalTheme.palette;
-
-  if (scheme === "dark") {
-    return {
-      // Match the app surface (--color-sheet) so code views blend with the rest of
-      // the app instead of using a distinct code-editor background.
-      background: "#0e0e0e",
-      text: terminalTheme.foreground,
-      mutedText: terminalTheme.mutedForeground,
-      headerBackground: "#0e0e0e",
-      border: terminalTheme.border,
-      hunkBackground: "#071f28",
-      hunkText: terminalBlue ?? "#009fff",
-      addBackground: "#0d2f28",
-      deleteBackground: "#391415",
-      addBar: "#00cab1",
-      deleteBar: terminalRed ?? "#ff2e3f",
-      addText: "#5ECC71",
-      deleteText: "#FF6762",
-    };
-  }
-
-  return {
-    // Match the app surface (--color-sheet) so code views blend with the rest of the
-    // app instead of using a distinct code-editor background.
-    background: "#f2f2f7",
-    text: "#070707",
-    mutedText: terminalTheme.mutedForeground,
-    headerBackground: "#f2f2f7",
-    border: terminalTheme.border,
-    hunkBackground: "#e0f2ff",
-    hunkText: terminalBlue ?? "#009fff",
-    addBackground: "#e5f8f5",
-    deleteBackground: "#ffe6e7",
-    addBar: "#00cab1",
-    deleteBar: terminalRed ?? "#ff2e3f",
-    addText: "#199F43",
-    deleteText: "#D52C36",
-  };
+  return resolveVexMobileReviewDiffTheme(scheme);
 }
 
 function mapChangeType(file: ReviewRenderableFile): NativeReviewDiffRow["changeType"] {

@@ -3,21 +3,21 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildGhosttyThemeConfig, getPierreTerminalTheme } from "./terminalTheme";
 
 describe("getPierreTerminalTheme", () => {
-  it("returns the Pierre light terminal palette", () => {
+  it("returns the Catppuccin Latte terminal palette", () => {
     expect(getPierreTerminalTheme("light")).toMatchObject({
-      background: "#f2f2f7",
-      foreground: "#6C6C71",
-      cursorForeground: "#009fff",
-      cursorBackground: "#f2f2f7",
+      background: "#eff1f5",
+      foreground: "#4c4f69",
+      cursorForeground: "#7287fd",
+      cursorBackground: "#eff1f5",
     });
   });
 
-  it("returns the Pierre dark terminal palette", () => {
+  it("returns the Catppuccin Mocha terminal palette", () => {
     expect(getPierreTerminalTheme("dark")).toMatchObject({
-      background: "#0a0a0a",
-      foreground: "#adadb1",
-      cursorForeground: "#009fff",
-      cursorBackground: "#0a0a0a",
+      background: "#1e1e2e",
+      foreground: "#cdd6f4",
+      cursorForeground: "#b4befe",
+      cursorBackground: "#1e1e2e",
     });
   });
 });
@@ -26,11 +26,11 @@ describe("buildGhosttyThemeConfig", () => {
   it("serializes theme colors into a ghostty config file", () => {
     const config = buildGhosttyThemeConfig(getPierreTerminalTheme("dark"));
 
-    expect(config).toContain("background = #0a0a0a");
-    expect(config).toContain("foreground = #adadb1");
-    expect(config).toContain("cursor-color = #009fff");
-    expect(config).toContain("palette = 0=#141415");
-    expect(config).toContain("palette = 15=#c6c6c8");
+    expect(config).toContain("background = #1e1e2e");
+    expect(config).toContain("foreground = #cdd6f4");
+    expect(config).toContain("cursor-color = #b4befe");
+    expect(config).toContain("palette = 0=#45475a");
+    expect(config).toContain("palette = 15=#a6adc8");
     expect(config.endsWith("\n")).toBe(true);
   });
 });

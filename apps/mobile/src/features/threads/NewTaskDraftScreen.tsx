@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-co
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "../../lib/useThemeColor";
 import { useFontFamily } from "../../lib/useFontFamily";
+import { VEX_MOBILE_PALETTE } from "../../vex/theme";
 
 import { EnvironmentId } from "@t3tools/contracts";
 import {
@@ -224,8 +225,9 @@ export function NewTaskDraftScreen(props: {
   const regularFontFamily = useFontFamily("regular");
   const bodyText = useScaledTextRole("body");
   const headlineText = useScaledTextRole("headline");
-  const sheetFadeOpaque = colorScheme === "dark" ? "rgba(14,14,14,0.98)" : "rgba(242,242,247,0.98)";
-  const sheetFadeTransparent = colorScheme === "dark" ? "rgba(14,14,14,0)" : "rgba(242,242,247,0)";
+  const sheetPalette = colorScheme === "dark" ? VEX_MOBILE_PALETTE.dark : VEX_MOBILE_PALETTE.light;
+  const sheetFadeOpaque = sheetPalette.sheet;
+  const sheetFadeTransparent = `${sheetPalette.screen}00`;
 
   // A new navigation to this mounted screen delivers a fresh initialProjectRef
   // reference — treat it as a new request and let it apply again.

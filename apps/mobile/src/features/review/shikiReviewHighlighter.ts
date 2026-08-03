@@ -7,8 +7,6 @@ import jsxLanguage from "@shikijs/langs/jsx";
 import tsxLanguage from "@shikijs/langs/tsx";
 import typescriptLanguage from "@shikijs/langs/typescript";
 import yamlLanguage from "@shikijs/langs/yaml";
-import githubDarkDefault from "@shikijs/themes/github-dark-default";
-import githubLightDefault from "@shikijs/themes/github-light-default";
 import { getFiletypeFromFileName } from "@pierre/diffs/utils/getFiletypeFromFileName";
 import * as Schema from "effect/Schema";
 
@@ -19,6 +17,10 @@ import {
 } from "./reviewHighlighterEngine";
 import type { ReviewRenderableFile, ReviewRenderableLineRow } from "./reviewModel";
 import { applyDiffRangesToTokens, computeWordAltDiffRanges } from "./reviewWordDiffs";
+import {
+  VEX_MOBILE_SHIKI_THEMES,
+  VEX_MOBILE_SHIKI_THEME_NAME_BY_SCHEME,
+} from "../../vex/codeTheme";
 
 export type ReviewDiffTheme = "light" | "dark";
 export type { ReviewHighlighterEngine };
@@ -54,10 +56,7 @@ export interface ReviewHighlightFileProgress {
   readonly highlightedLineCount: number;
 }
 
-const SHIKI_THEME_NAME_BY_SCHEME = {
-  light: "github-light-default",
-  dark: "github-dark-default",
-} as const;
+const SHIKI_THEME_NAME_BY_SCHEME = VEX_MOBILE_SHIKI_THEME_NAME_BY_SCHEME;
 const REVIEW_HIGHLIGHTER_ENGINE_ENV_VALUE =
   process.env.EXPO_PUBLIC_REVIEW_HIGHLIGHTER_ENGINE ??
   (process.env.NODE_ENV === "test" ? "javascript" : "native");
@@ -270,7 +269,7 @@ async function getHighlighter(): Promise<HighlighterCore> {
         resultCacheDisabled: REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE,
       });
 
-      const themes = [githubLightDefault, githubDarkDefault];
+      const themes = [...VEX_MOBILE_SHIKI_THEMES];
 
       if (REVIEW_HIGHLIGHTER_ENGINE_PREFERENCE !== "javascript") {
         try {

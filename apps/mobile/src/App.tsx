@@ -6,7 +6,7 @@ import { StatusBar, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { createStaticNavigation, DarkTheme, DefaultTheme } from "@react-navigation/native";
+import { createStaticNavigation } from "@react-navigation/native";
 
 import { RegistryContext } from "@effect/atom-react";
 import { ConfirmDialogHost } from "./components/ConfirmDialogHost";
@@ -22,8 +22,10 @@ import { appAtomRegistry } from "./state/atom-registry";
 import { OverlayPortalHost } from "./components/OverlayPortal";
 import { appBlurTargetRef } from "./lib/appBlurTarget";
 import { useThemeColor } from "./lib/useThemeColor";
+import { useVexNavigationTheme } from "./vex/navigationTheme";
 
 import "../global.css";
+import "./vex/theme.css";
 
 if (process.env.EXPO_PUBLIC_SHOWCASE === "1") {
   prepareNativeShowcaseCapture();
@@ -60,6 +62,7 @@ function SplashScreenCoordinator() {
 export default function App() {
   const colorScheme = useColorScheme();
   const statusBarBg = useThemeColor("--color-status-bar");
+  const navigationTheme = useVexNavigationTheme();
 
   return (
     <RegistryContext.Provider value={appAtomRegistry}>
@@ -82,10 +85,7 @@ export default function App() {
                 {/* Blur target for Android dropdown backdrops — see appBlurTarget.ts. */}
                 <BlurTargetView ref={appBlurTargetRef} style={{ flex: 1 }}>
                   <IncomingShareProvider>
-                    <Navigation
-                      linking={appLinking}
-                      theme={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-                    />
+                    <Navigation linking={appLinking} theme={navigationTheme} />
                   </IncomingShareProvider>
                   <ConfirmDialogHost />
                 </BlurTargetView>

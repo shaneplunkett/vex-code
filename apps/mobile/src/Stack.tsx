@@ -62,14 +62,18 @@ import {
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "./native/native-glass";
 import { nativeHeaderScrollEdgeEffects } from "./native/StackHeader";
 import { useThreadOutboxDrain } from "./state/use-thread-outbox-drain";
+import { VEX_MOBILE_PALETTE } from "./vex/theme";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
-// Matches --color-sheet in global.css (light/dark). DynamicColorIOS lets the header
+// Matches --color-sheet in the Vex mobile theme. DynamicColorIOS lets the header
 // background stay STATIC config while still adapting to appearance changes.
 const SHEET_BACKGROUND_COLOR =
   Platform.OS === "ios"
-    ? DynamicColorIOS({ light: "rgba(242, 242, 247, 0.98)", dark: "rgba(14, 14, 14, 0.98)" })
+    ? DynamicColorIOS({
+        light: VEX_MOBILE_PALETTE.light.sheet,
+        dark: VEX_MOBILE_PALETTE.dark.sheet,
+      })
     : undefined;
 
 type AppScreenOptions = NativeStackNavigationOptions & {
