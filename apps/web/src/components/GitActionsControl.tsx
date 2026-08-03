@@ -77,7 +77,7 @@ import {
   useVcsInitAction,
   useVcsPullAction,
 } from "~/lib/sourceControlActions";
-import { useThread, useThreadShell } from "~/state/entities";
+import { useThread } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
 import { serverEnvironment } from "~/state/server";
 import { sourceControlEnvironment } from "~/state/sourceControl";
@@ -90,7 +90,6 @@ import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { readLocalApi } from "~/localApi";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { openPullRequestLink } from "~/lib/openPullRequestLink";
-import { resolveServerThreadSubscriptionRef } from "~/threadRoutes";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
@@ -994,16 +993,9 @@ export default function GitActionsControl({
         ? store.getDraftThreadByRef(activeThreadRef)
         : null,
   );
-  const activeServerThreadShell = useThreadShell(activeThreadRef);
-  const activeServerThread = useThread(
-    activeThreadRef === null
-      ? null
-      : resolveServerThreadSubscriptionRef({
-          routeKind: draftId !== undefined || activeDraftThread !== null ? "draft" : "server",
-          routeThreadRef: activeThreadRef,
-          serverThreadShellExists: activeServerThreadShell !== null,
-        }),
-  );
+  const activeServerThread = useThread(activeThreadRef, {
+    waitForShell: activeDraftThread !== null,
+  });
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const [isCommitDialogOpen, setIsCommitDialogOpen] = useState(false);
   const [dialogCommitMessage, setDialogCommitMessage] = useState("");

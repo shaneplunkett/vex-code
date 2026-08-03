@@ -20,6 +20,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:mcp-status",
       tag: ORCHESTRATION_WS_METHODS.getMcpStatus,
     }),
+    threadSearch: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:thread-search",
+      tag: ORCHESTRATION_WS_METHODS.searchThreads,
+      staleTimeMs: 30_000,
+      idleTtlMs: 60_000,
+    }),
     archivedShellSnapshot: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:archived-shell-snapshot",
       tag: ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,

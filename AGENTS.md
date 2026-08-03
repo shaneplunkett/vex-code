@@ -115,3 +115,50 @@ agents.
   examples of idiomatic usage, tests, module structure, and API design.
 - When writing relay infrastructure code with Alchemy, inspect `.repos/alchemy-effect/` for examples of
   idiomatic usage, tests, module structure, and API design.
+
+## Runtime Safety
+
+- Never kill processes by matching a name, path, or worktree string. The active coding agent and other
+  development servers may share those strings. Stop only a PID captured at spawn, or a confirmed port
+  owner after checking its working directory.
+- `~/.t3/userdata` is live user data. Reading it or making a safe snapshot is allowed; never start a
+  development server against it, open it read-write, clean it up, or symlink a worktree to it.
+- Do not set `VITE_HTTP_URL` or `VITE_WS_URL` for development. Development is single-origin and Vite
+  proxies `/api`, `/ws`, `/oauth`, and `/.well-known`; baked localhost origins break remote browsers.
+
+## Product Surface Checklist
+
+Before finishing user-visible or protocol work, check the applicable surfaces explicitly:
+
+- Entry points: chat, Settings, command palette, and keybindings.
+- Clients: web, desktop, and mobile; shared client logic belongs in `packages/client-runtime`.
+- Providers: Codex, Claude, Cursor, Grok, and OpenCode.
+- Contracts: wire changes flow through `packages/contracts` and every consumer.
+- Reverse states: every action needs a way back and a visible resulting state.
+- Connection modes: local, remote/relay, tunnel, multi-device, and multi-environment.
+- Documentation: user behaviour in `docs/user`, architecture in `docs/internals`, and runbooks in
+  `docs/operations`.
+
+## Development Servers and Test Data
+
+- `vp i` installs dependencies. `vp run dev` starts server and web with isolated worktree state under
+  `.t3`; read the actual ports from the dev-runner output because occupied ports can shift them.
+- `--share` publishes over the tailnet. Give the user the pairing URL including its token, not the bare
+  origin, and do not open the shared URL yourself.
+- Seed isolated test data by snapshotting a real database into the worktree. Prefer SQLite
+  `VACUUM INTO` while the source may be live; a plain copy is safe only when the source is stopped and
+  includes its WAL and SHM siblings. Copy data into a sandbox, never back out.
+- Backend async tests should wait on typed receipts and worker drains rather than sleeps or polling.
+
+## Architecture and Taste
+
+Clients send typed WebSocket requests. The server turns them into commands, a pure decider persists
+events, and a projector builds the read model. Provider adapters translate native provider protocols;
+queue-backed reactors own side effects and emit receipts. Each turn ends with a hidden Git checkpoint.
+
+- Put provider-specific complexity at adapter boundaries; keep orchestration pure and UI components
+  simple.
+- Prefer inferred types and avoid `any`.
+- Comments should explain how something is used, not narrate every line.
+- Avoid continuously repainting animations and other work that harms high-refresh performance.
+- Keep scope small and systems obvious. Do not preserve complexity merely because it already exists.
