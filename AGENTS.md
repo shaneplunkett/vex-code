@@ -145,6 +145,9 @@ Before finishing user-visible or protocol work, check the applicable surfaces ex
   `.t3`; read the actual ports from the dev-runner output because occupied ports can shift them.
 - `--share` publishes over the tailnet. Give the user the pairing URL including its token, not the bare
   origin, and do not open the shared URL yourself.
+- If a pairing token is consumed, mint a fresh standard-scope token with
+  `node apps/server/src/bin.ts pair`; the startup pairing URL carries admin scopes needed for
+  Settings → Connections management.
 - Seed isolated test data by snapshotting a real database into the worktree. Prefer SQLite
   `VACUUM INTO` while the source may be live; a plain copy is safe only when the source is stopped and
   includes its WAL and SHM siblings. Copy data into a sandbox, never back out.

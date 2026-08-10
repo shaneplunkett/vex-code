@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - This regression test intentionally inspects the CSS source.
 import * as NodeFS from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
-import { resolveVexCodeThemeName } from "./theme";
+import { resolveVexCodeThemeName, VEX_THEME_PREVIEW_COLORS } from "./theme";
 
 const themeCss = NodeFS.readFileSync(new URL("./theme.css", import.meta.url), "utf8");
 
@@ -24,33 +24,34 @@ function cssRuleBody(marker: string): string {
   return themeCss.slice(openingBraceIndex + 1, closingBraceIndex);
 }
 
-describe("Vex sidebar theme", () => {
-  it("keeps the legacy sidebar on the original Vex surface semantics", () => {
-    const rule = cssRuleBody('[data-sidebar-version="v1"]');
+describe("Vex standard theme", () => {
+  it("uses Catppuccin for the unselected light and dark palettes", () => {
+    const light = cssRuleBody(":root {");
+    const dark = cssRuleBody(":root.dark");
 
-    expect(rule).toContain("--background: inherit");
-    expect(rule).toContain("--sidebar: var(--card)");
-    expect(rule).toContain("--sidebar-row-hover: var(--accent)");
-    expect(rule).toContain("--sidebar-row-active: var(--accent)");
-    expect(rule).not.toContain("#e6e9ef");
-    expect(rule).not.toContain("zinc");
+    expect(light).toContain("--background: #eff1f5");
+    expect(light).toContain("--primary: #8839ef");
+    expect(light).toContain("--terminal-cursor: #7287fd");
+    expect(dark).toContain("--background: #1e1e2e");
+    expect(dark).toContain("--primary: #cba6f7");
+    expect(dark).toContain("--terminal-cursor: #b4befe");
   });
 
-  it("reapplies Catppuccin Latte over upstream's scoped sidebar v2 palette", () => {
-    const rule = cssRuleBody('[data-sidebar-version="v2"]');
+  it("reattaches the palette at upstream's single sidebar seam", () => {
+    const light = cssRuleBody("[data-app-sidebar]");
+    const dark = cssRuleBody(".dark [data-app-sidebar]");
 
-    expect(rule).toContain("--sidebar: #e6e9ef");
-    expect(rule).toContain("--sidebar-row-hover: #dce0e8");
-    expect(rule).toContain("--sidebar-row-active: #ccd0da");
-    expect(rule).not.toContain("zinc");
+    expect(light).toContain("--sidebar: #e6e9ef");
+    expect(light).toContain("--sidebar-row-active: #ccd0da");
+    expect(dark).toContain("--sidebar: #181825");
+    expect(dark).toContain("--sidebar-row-active: #45475a");
+    expect(themeCss).not.toContain("data-sidebar-version");
   });
 
-  it("reapplies Catppuccin Mocha over upstream's scoped dark sidebar v2 palette", () => {
-    const rule = cssRuleBody('.dark [data-sidebar-version="v2"]');
-
-    expect(rule).toContain("--sidebar: #181825");
-    expect(rule).toContain("--sidebar-row-hover: #313244");
-    expect(rule).toContain("--sidebar-row-active: #45475a");
-    expect(rule).not.toContain("#000");
+  it("publishes matching theme-library previews", () => {
+    expect(VEX_THEME_PREVIEW_COLORS.light.sidebar).toBe("#e6e9ef");
+    expect(VEX_THEME_PREVIEW_COLORS.light.accent).toBe("#8839ef");
+    expect(VEX_THEME_PREVIEW_COLORS.dark.sidebar).toBe("#181825");
+    expect(VEX_THEME_PREVIEW_COLORS.dark.accent).toBe("#cba6f7");
   });
 });

@@ -1,14 +1,23 @@
 /*
  * Vex Code visual layer.
  *
- * Keep the fork palette and typography here so upstream-owned components can
- * continue consuming the same semantic tokens.
+ * The unselected "standard" theme is Vex's Catppuccin palette. Upstream's
+ * theme library writes higher-specificity semantic tokens when another theme
+ * is selected, so this remains a narrow branded default rather than fighting
+ * the editor or imported themes.
  */
 
 :root {
   /* Catppuccin Latte */
   --background: #eff1f5;
   --app-chrome-background: #e6e9ef;
+  --toolbar-background: #e6e9ef;
+  --toolbar-foreground: #4c4f69;
+  --toolbar-border: color-mix(in srgb, #9ca0b0 55%, transparent);
+  --toolbar-control: #dce0e8;
+  --toolbar-control-foreground: #4c4f69;
+  --toolbar-control-hover: #ccd0da;
+  --surface-raised: #e6e9ef;
   --foreground: #4c4f69;
   --card: #eff1f5;
   --card-foreground: #4c4f69;
@@ -20,8 +29,19 @@
   --secondary-foreground: #4c4f69;
   --muted: #dce0e8;
   --muted-foreground: #6c6f85;
+  --placeholder: #7c7f93;
+  --secondary-label: #6c6f85;
+  --icon-muted: #7c7f93;
   --accent: #ccd0da;
   --accent-foreground: #4c4f69;
+  --message-surface: #dce0e8;
+  --message-foreground: #4c4f69;
+  --message-action: #8839ef;
+  --message-action-foreground: #eff1f5;
+  --message-action-hover: #7c3aed;
+  --error: #d20f39;
+  --error-foreground: #d20f39;
+  --error-surface: color-mix(in srgb, #d20f39 10%, transparent);
   --destructive: #d20f39;
   --destructive-foreground: #d20f39;
   --border: color-mix(in srgb, #9ca0b0 55%, transparent);
@@ -33,6 +53,27 @@
   --success-foreground: #40a02b;
   --warning: #df8e1d;
   --warning-foreground: #df8e1d;
+  --warning-surface: color-mix(in srgb, #df8e1d 10%, transparent);
+  --update: #8839ef;
+  --update-foreground: #8839ef;
+  --update-surface: color-mix(in srgb, #8839ef 12%, transparent);
+  --sidebar: #e6e9ef;
+  --sidebar-foreground: #4c4f69;
+  --sidebar-muted-foreground: #6c6f85;
+  --sidebar-control-surface: #dce0e8;
+  --sidebar-row-hover: #dce0e8;
+  --sidebar-row-active: #ccd0da;
+  --sidebar-row-selected: #dce0e8;
+  --sidebar-border: var(--border);
+  --sidebar-stage-fade: var(--sidebar);
+  --code-background: #e6e9ef;
+  --code-foreground: #4c4f69;
+  --terminal-background: #eff1f5;
+  --terminal-foreground: #4c4f69;
+  --terminal-cursor: #7287fd;
+  --terminal-selection-background: #9ca0b066;
+  --terminal-scrollbar: #9ca0b04d;
+  --terminal-scrollbar-hover: #8c8fa166;
   --font-mono:
     "Mononoki Nerd Font Mono", "mononoki", "JetBrains Mono", "SF Mono", "SFMono-Regular", Consolas,
     "Liberation Mono", Menlo, monospace;
@@ -42,6 +83,13 @@
   /* Catppuccin Mocha */
   --background: #1e1e2e;
   --app-chrome-background: #181825;
+  --toolbar-background: #181825;
+  --toolbar-foreground: #cdd6f4;
+  --toolbar-border: color-mix(in srgb, #585b70 72%, transparent);
+  --toolbar-control: #313244;
+  --toolbar-control-foreground: #cdd6f4;
+  --toolbar-control-hover: #45475a;
+  --surface-raised: #313244;
   --foreground: #cdd6f4;
   --card: #1e1e2e;
   --card-foreground: #cdd6f4;
@@ -53,8 +101,19 @@
   --secondary-foreground: #cdd6f4;
   --muted: #313244;
   --muted-foreground: #a6adc8;
+  --placeholder: #9399b2;
+  --secondary-label: #a6adc8;
+  --icon-muted: #9399b2;
   --accent: #313244;
   --accent-foreground: #cdd6f4;
+  --message-surface: #313244;
+  --message-foreground: #cdd6f4;
+  --message-action: #cba6f7;
+  --message-action-foreground: #11111b;
+  --message-action-hover: #b4befe;
+  --error: #f38ba8;
+  --error-foreground: #f38ba8;
+  --error-surface: color-mix(in srgb, #f38ba8 16%, transparent);
   --destructive: #f38ba8;
   --destructive-foreground: #f38ba8;
   --border: color-mix(in srgb, #585b70 72%, transparent);
@@ -66,38 +125,33 @@
   --success-foreground: #a6e3a1;
   --warning: #f9e2af;
   --warning-foreground: #f9e2af;
-}
-
-/*
- * Upstream scopes a complete neutral palette to each sidebar version. The
- * legacy sidebar should retain Vex's original card/accent treatment, while V2
- * uses its own surface hierarchy. Reapply both contracts at that seam so they
- * beat the scoped zinc/black defaults rather than relying on :root specificity.
- */
-[data-sidebar-version="v1"],
-.dark [data-sidebar-version="v1"] {
-  --background: inherit;
-  --foreground: inherit;
-  --card: inherit;
-  --card-foreground: inherit;
-  --accent: inherit;
-  --accent-foreground: inherit;
-  --muted: inherit;
-  --muted-foreground: inherit;
-  --border: inherit;
-  --input: inherit;
-  --sidebar: var(--card);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-muted-foreground: var(--muted-foreground);
-  --sidebar-control-surface: var(--accent);
-  --sidebar-row-hover: var(--accent);
-  --sidebar-row-active: var(--accent);
-  --sidebar-row-selected: var(--accent);
+  --warning-surface: color-mix(in srgb, #f9e2af 16%, transparent);
+  --update: #cba6f7;
+  --update-foreground: #cba6f7;
+  --update-surface: color-mix(in srgb, #cba6f7 18%, transparent);
+  --sidebar: #181825;
+  --sidebar-foreground: #cdd6f4;
+  --sidebar-muted-foreground: #a6adc8;
+  --sidebar-control-surface: #313244;
+  --sidebar-row-hover: #313244;
+  --sidebar-row-active: #45475a;
+  --sidebar-row-selected: #313244;
   --sidebar-border: var(--border);
   --sidebar-stage-fade: var(--sidebar);
+  --code-background: #181825;
+  --code-foreground: #cdd6f4;
+  --terminal-background: #1e1e2e;
+  --terminal-foreground: #cdd6f4;
+  --terminal-cursor: #b4befe;
+  --terminal-selection-background: #585b7066;
+  --terminal-scrollbar: #585b704d;
+  --terminal-scrollbar-hover: #6c708666;
 }
 
-[data-sidebar-version="v2"] {
+/* Upstream deliberately scopes the standard navigation palette. Reattach the
+   Vex standard colours at that single seam; selected library themes use the
+   more-specific html[data-theme-id] selector and remain fully customisable. */
+[data-app-sidebar] {
   --background: #eff1f5;
   --foreground: #4c4f69;
   --card: #eff1f5;
@@ -117,9 +171,10 @@
   --sidebar-row-selected: #dce0e8;
   --sidebar-border: var(--border);
   --sidebar-stage-fade: var(--sidebar);
+  background-color: var(--sidebar);
 }
 
-.dark [data-sidebar-version="v2"] {
+.dark [data-app-sidebar] {
   --background: #1e1e2e;
   --foreground: #cdd6f4;
   --card: #1e1e2e;

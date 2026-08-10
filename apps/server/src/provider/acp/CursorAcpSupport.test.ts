@@ -84,7 +84,7 @@ describe("buildCursorAcpSpawnInput", () => {
         replaceAcpSpawnEnvironment({ KEEP: "yes" }),
       ),
     ).toEqual({
-      command: "agent",
+      command: "cursor-agent",
       args: ["acp"],
       cwd: "/tmp/project",
       environment: { values: { KEEP: "yes" }, mode: "replace" },
