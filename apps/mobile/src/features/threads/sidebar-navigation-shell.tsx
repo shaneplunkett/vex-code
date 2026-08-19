@@ -9,7 +9,8 @@ import { Platform } from "react-native";
 import { getCompactBrandHeaderOptions } from "../../components/CompactBrandTitle";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { nativeHeaderScrollEdgeEffects } from "../../native/StackHeader";
-import { useVexNavigationTheme } from "../../vex/navigationTheme";
+import { useMobileNavigationTheme } from "../../lib/useMobileNavigationTheme";
+import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
 const SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
 
@@ -52,7 +53,8 @@ const SidebarStack = createNativeStackNavigator();
  * navigation hooks used for header configuration inside the pane.
  */
 export function SidebarNavigationShell(props: { readonly children: ReactNode }) {
-  const navigationTheme = useVexNavigationTheme();
+  const { themeAppearance } = useAppearancePreferences();
+  const navigationTheme = useMobileNavigationTheme(themeAppearance);
 
   return (
     <NavigationIndependentTree>
