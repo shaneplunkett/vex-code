@@ -13,7 +13,6 @@
  */
 import type {
   ProviderInterruptTurnInput,
-  OrchestrationGetMcpStatusResult,
   ProviderInstanceId,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -22,6 +21,8 @@ import type {
   ProviderSession,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
+  ProviderUploadFeedbackInput,
+  ProviderUploadFeedbackResult,
   ThreadId,
   ProviderTurnStartResult,
 } from "@t3tools/contracts";
@@ -99,20 +100,19 @@ export interface ProviderServiceShape {
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
 
   /**
-   * Read MCP connection health for a thread without starting or recovering its
-   * provider process merely to populate UI diagnostics.
-   */
-  readonly getMcpStatus: (
-    threadId: ThreadId,
-  ) => Effect.Effect<OrchestrationGetMcpStatusResult, ProviderServiceError>;
-
-  /**
    * Roll back provider conversation state by a number of turns.
    */
   readonly rollbackConversation: (input: {
     readonly threadId: ThreadId;
     readonly numTurns: number;
   }) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
+   * Upload a thread and return the provider's shareable feedback identifier.
+   */
+  readonly uploadFeedback: (
+    input: ProviderUploadFeedbackInput,
+  ) => Effect.Effect<ProviderUploadFeedbackResult, ProviderServiceError>;
 
   /**
    * Canonical provider runtime event stream.

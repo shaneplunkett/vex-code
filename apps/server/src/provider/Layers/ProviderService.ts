@@ -12,7 +12,6 @@
 import {
   ModelSelection,
   NonNegativeInt,
-  type OrchestrationGetMcpStatusResult,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -20,6 +19,7 @@ import {
   ProviderSendTurnInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
+  ProviderUploadFeedbackInput,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
@@ -1077,49 +1077,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const getInstanceInfo: ProviderServiceMethod<"getInstanceInfo"> = (instanceId) =>
     registry.getInstanceInfo(instanceId);
 
-  const getMcpStatus: ProviderServiceMethod<"getMcpStatus"> = Effect.fn(
-    "ProviderService.getMcpStatus",
-  )(function* (threadId) {
-    const checkedAt = yield* nowIso;
-    const binding = Option.getOrUndefined(yield* directory.getBinding(threadId));
-    if (!binding) {
-      return {
-        availability: "inactive",
-        servers: [],
-        checkedAt,
-      } satisfies OrchestrationGetMcpStatusResult;
-    }
-    const routed = yield* resolveRoutableSession({
-      threadId,
-      operation: "ProviderService.getMcpStatus",
-      allowRecovery: false,
-    });
-    const base = {
-      provider: routed.adapter.provider,
-      checkedAt,
-    } as const;
-    if (!routed.isActive) {
-      return {
-        ...base,
-        availability: "inactive",
-        servers: [],
-      } satisfies OrchestrationGetMcpStatusResult;
-    }
-    if (!routed.adapter.getMcpStatus) {
-      return {
-        ...base,
-        availability: "unsupported",
-        servers: [],
-      } satisfies OrchestrationGetMcpStatusResult;
-    }
-    const servers = yield* routed.adapter.getMcpStatus(threadId);
-    return {
-      ...base,
-      availability: "available",
-      servers,
-    } satisfies OrchestrationGetMcpStatusResult;
-  });
-
   const rollbackConversation: ProviderServiceMethod<"rollbackConversation"> = Effect.fn(
     "rollbackConversation",
   )(function* (rawInput) {
@@ -1160,6 +1117,47 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       }),
     );
   });
+
+  const uploadFeedback: ProviderServiceMethod<"uploadFeedback"> = Effect.fn("uploadFeedback")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.uploadFeedback",
+        schema: ProviderUploadFeedbackInput,
+        payload: rawInput,
+      });
+      let routed = yield* resolveRoutableSession({
+        threadId: input.threadId,
+        operation: "ProviderService.uploadFeedback",
+        allowRecovery: false,
+      });
+      if (routed.adapter.uploadFeedback === undefined) {
+        return yield* toValidationError(
+          "ProviderService.uploadFeedback",
+          `Provider '${routed.adapter.provider}' does not support feedback uploads.`,
+        );
+      }
+      if (!routed.isActive) {
+        routed = yield* resolveRoutableSession({
+          threadId: input.threadId,
+          operation: "ProviderService.uploadFeedback",
+          allowRecovery: true,
+        });
+      }
+      const uploadFeedback = routed.adapter.uploadFeedback;
+      if (uploadFeedback === undefined) {
+        return yield* toValidationError(
+          "ProviderService.uploadFeedback",
+          `Provider '${routed.adapter.provider}' does not support feedback uploads.`,
+        );
+      }
+      yield* Effect.annotateCurrentSpan({
+        "provider.operation": "upload-feedback",
+        "provider.kind": routed.adapter.provider,
+        "provider.thread_id": input.threadId,
+      });
+      return yield* uploadFeedback(input);
+    },
+  );
 
   const runStopAll = Effect.fn("runStopAll")(function* () {
     const threadIds = yield* directory.listThreadIds();
@@ -1231,8 +1229,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     listSessions,
     getCapabilities,
     getInstanceInfo,
-    getMcpStatus,
     rollbackConversation,
+    uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

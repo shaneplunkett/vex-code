@@ -13,10 +13,11 @@ import type {
   ProviderDriverKind,
   ProviderUserInputAnswers,
   ProviderRuntimeEvent,
-  ProviderMcpServerStatus,
   ProviderSendTurnInput,
   ProviderSession,
   ProviderSessionStartInput,
+  ProviderUploadFeedbackInput,
+  ProviderUploadFeedbackResult,
   ThreadId,
   ProviderTurnStartResult,
   TurnId,
@@ -103,14 +104,6 @@ export interface ProviderAdapterShape<TError> {
   readonly hasSession: (threadId: ThreadId) => Effect.Effect<boolean>;
 
   /**
-   * Read the provider-native MCP connection inventory for an active session.
-   * Omitted by providers that do not expose MCP status introspection.
-   */
-  readonly getMcpStatus?: (
-    threadId: ThreadId,
-  ) => Effect.Effect<ReadonlyArray<ProviderMcpServerStatus>, TError>;
-
-  /**
    * Read a provider thread snapshot.
    */
   readonly readThread: (threadId: ThreadId) => Effect.Effect<ProviderThreadSnapshot, TError>;
@@ -122,6 +115,13 @@ export interface ProviderAdapterShape<TError> {
     threadId: ThreadId,
     numTurns: number,
   ) => Effect.Effect<ProviderThreadSnapshot, TError>;
+
+  /**
+   * Upload a thread to the provider when the adapter supports feedback.
+   */
+  readonly uploadFeedback?: (
+    input: ProviderUploadFeedbackInput,
+  ) => Effect.Effect<ProviderUploadFeedbackResult, TError>;
 
   /**
    * Stop all sessions owned by this adapter.
