@@ -81,6 +81,10 @@ import {
 } from "../WorkspaceEnvironment.ts";
 import { resolveCursorAcpBaseModelId } from "./CursorProvider.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import {
+  rejectUnsupportedSkillInvocations,
+  requireResolvedSkillInvocationInput,
+} from "../skillInvocations.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 const PROVIDER = ProviderDriverKind.make("cursor");
@@ -928,6 +932,13 @@ export function makeCursorAdapter(
 
     const sendTurn: CursorAdapterShape["sendTurn"] = (input) =>
       Effect.gen(function* () {
+        yield* requireResolvedSkillInvocationInput(
+          rejectUnsupportedSkillInvocations(input, "Cursor"),
+          {
+            provider: PROVIDER,
+            method: "session/prompt",
+          },
+        );
         const ctx = yield* requireSession(input.threadId);
         // A sendTurn while a prompt is in flight is a steer: the agent folds
         // the new prompt into the ongoing work, so the active turn id is

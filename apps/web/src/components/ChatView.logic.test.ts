@@ -24,6 +24,7 @@ import {
   hasEnvironmentReconnectWarningGraceElapsed,
   hasServerAcknowledgedLocalDispatch,
   isBranchMismatchDismissedForSession,
+  mapSkillInvocationsThroughPromptTransform,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
   resolveBackgroundDraftWorkspaceOptions,
@@ -44,6 +45,40 @@ const environmentId = EnvironmentId.make("environment-local");
 const projectId = ProjectId.make("project-1");
 const threadId = ThreadId.make("thread-1");
 const now = "2026-03-29T00:00:00.000Z";
+
+describe("mapSkillInvocationsThroughPromptTransform", () => {
+  it("keeps selected skill ranges attached through trimming and a provider prefix", () => {
+    const text = "  ok, now $implement all the tickets  ";
+    const start = text.indexOf("$implement");
+
+    expect(
+      mapSkillInvocationsThroughPromptTransform({
+        text,
+        skillInvocations: [{ name: "implement", start, end: start + "$implement".length }],
+        transform: (markedText) => `Ultrathink:\n${markedText.trim()}`,
+      }),
+    ).toEqual({
+      text: "Ultrathink:\nok, now $implement all the tickets",
+      skillInvocations: [
+        {
+          name: "implement",
+          start: "Ultrathink:\nok, now ".length,
+          end: "Ultrathink:\nok, now $implement".length,
+        },
+      ],
+    });
+  });
+
+  it("rejects a range that no longer points at its canonical skill source", () => {
+    expect(() =>
+      mapSkillInvocationsThroughPromptTransform({
+        text: "run $review",
+        skillInvocations: [{ name: "implement", start: 4, end: 11 }],
+        transform: (text) => text,
+      }),
+    ).toThrow("Invalid composer skill invocation range for 'implement'.");
+  });
+});
 
 describe("draft hero submission transition", () => {
   it("does not dock the composer before a background submission", () => {

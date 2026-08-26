@@ -56,6 +56,10 @@ import {
   type OpenCodeServerConnection,
 } from "../opencodeRuntime.ts";
 import * as Option from "effect/Option";
+import {
+  rejectUnsupportedSkillInvocations,
+  requireResolvedSkillInvocationInput,
+} from "../skillInvocations.ts";
 
 const PROVIDER = ProviderDriverKind.make("opencode");
 
@@ -1442,6 +1446,13 @@ export function makeOpenCodeAdapter(
     );
 
     const sendTurn: OpenCodeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
+      yield* requireResolvedSkillInvocationInput(
+        rejectUnsupportedSkillInvocations(input, "OpenCode"),
+        {
+          provider: PROVIDER,
+          method: "session.promptAsync",
+        },
+      );
       const context = yield* ensureSessionContext(sessions, input.threadId);
       // A sendTurn while a turn is active is a steer: OpenCode queues the
       // prompt into the busy session and the work continues as one turn, so

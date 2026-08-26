@@ -832,6 +832,34 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("lowers a canonical inline skill invocation to Claude slash syntax", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const input = "ok, now $implement all the tickets";
+      const start = input.indexOf("$implement");
+
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input,
+        skillInvocations: [{ name: "implement", start, end: start + "$implement".length }],
+      });
+
+      const promptText = yield* Effect.promise(() =>
+        readFirstPromptText(harness.getLastCreateQueryInput()),
+      );
+      assert.equal(promptText, "/implement ok, now implement all the tickets");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("maps Claude stream/runtime messages to canonical provider runtime events", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

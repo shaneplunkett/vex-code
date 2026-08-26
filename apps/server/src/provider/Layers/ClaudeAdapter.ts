@@ -76,6 +76,10 @@ import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
+import {
+  requireResolvedSkillInvocationInput,
+  resolveClaudeSkillInvocations,
+} from "../skillInvocations.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
   getClaudeModelCapabilities,
@@ -4425,6 +4429,18 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   );
 
   const sendTurn: ClaudeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
+    const resolvedSkillInput = yield* requireResolvedSkillInvocationInput(
+      resolveClaudeSkillInvocations(input),
+      {
+        provider: PROVIDER,
+        method: "turn/start",
+      },
+    );
+    const loweredInput: ProviderSendTurnInput = {
+      ...input,
+      ...(resolvedSkillInput !== undefined ? { input: resolvedSkillInput } : {}),
+      skillInvocations: [],
+    };
     const context = yield* requireSession(input.threadId);
     const modelSelection =
       input.modelSelection !== undefined && input.modelSelection.instanceId === boundInstanceId
@@ -4514,7 +4530,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       });
     }
 
-    const message = yield* buildUserMessageEffect(input, {
+    const message = yield* buildUserMessageEffect(loweredInput, {
       fileSystem,
       attachmentsDir: serverConfig.attachmentsDir,
       boundInstanceId,

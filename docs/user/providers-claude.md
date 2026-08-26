@@ -41,6 +41,13 @@ T3 Code looks for Claude skills in the Claude config directory's `skills` folder
 
 If the same skill name exists in more than one folder, the later folder wins.
 
+Use `$` in the composer to invoke a Claude skill explicitly, including a skill marked
+`disable-model-invocation: true`. The timeline keeps the `$skill` text while T3 Code sends the
+provider-native leading slash invocation to Claude Code. Claude currently accepts one such skill per
+message and drops slash expansion when an image is attached, so T3 Code rejects those combinations
+instead of silently sending an inert skill name. Skills marked `user-invocable: false` are not shown
+because Claude does not allow the user to invoke them directly.
+
 ## I Want Work And Personal Claude Accounts
 
 Use a different Claude config directory for each account.

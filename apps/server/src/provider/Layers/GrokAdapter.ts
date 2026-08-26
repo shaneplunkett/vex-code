@@ -72,6 +72,10 @@ import {
   type ProviderSessionEnvironmentOptions,
 } from "../WorkspaceEnvironment.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
+import {
+  rejectUnsupportedSkillInvocations,
+  requireResolvedSkillInvocationInput,
+} from "../skillInvocations.ts";
 
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
@@ -930,6 +934,13 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
 
     const sendTurn: GrokAdapterShape["sendTurn"] = (input) =>
       Effect.gen(function* () {
+        yield* requireResolvedSkillInvocationInput(
+          rejectUnsupportedSkillInvocations(input, "Grok"),
+          {
+            provider: PROVIDER,
+            method: "session/prompt",
+          },
+        );
         const prepared = yield* withThreadLock(
           input.threadId,
           Effect.gen(function* () {
