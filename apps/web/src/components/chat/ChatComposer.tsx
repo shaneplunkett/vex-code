@@ -43,6 +43,7 @@ import {
   composerSubmissionIntentForEnter,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  getUnavailableSkillInvocationNames,
   replaceTextRange,
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
@@ -2807,11 +2808,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         };
       },
       validateProviderInput: (providerInput: string) => {
-        const validationMessage = getComposerSubmissionValidationMessage({
-          prompt: promptRef.current,
-          providerInput,
-          submissionTarget: "provider-turn",
+        const snapshot = readComposerSnapshot();
+        const unavailableSkills = getUnavailableSkillInvocationNames({
+          skillInvocations: snapshot.skillInvocations,
+          skills: selectedProviderStatus?.skills ?? [],
         });
+        const validationMessage =
+          unavailableSkills.length > 0
+            ? `${unavailableSkills.map((name) => `$${name}`).join(", ")} ${unavailableSkills.length === 1 ? "is" : "are"} no longer available for the selected provider. Remove the stale skill ${unavailableSkills.length === 1 ? "chip" : "chips"} and choose again.`
+            : getComposerSubmissionValidationMessage({
+                prompt: snapshot.value,
+                providerInput,
+                submissionTarget: "provider-turn",
+              });
         providerInputRejectedRef.current = validationMessage !== null;
         setProviderInputSubmissionError(validationMessage);
         return validationMessage === null;
@@ -2844,6 +2853,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       noProviderAvailable,
       selectedPromptEffort,
       selectedProvider,
+      selectedProviderStatus,
       selectedProviderModels,
     ],
   );

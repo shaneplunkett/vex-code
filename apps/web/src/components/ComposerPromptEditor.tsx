@@ -68,6 +68,10 @@ import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   type TerminalContextDraft,
 } from "~/lib/terminalContext";
+import {
+  type ComposerSkillMetadata,
+  reconcileComposerSkillMetadata,
+} from "~/composerSkillMetadata";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
 import {
@@ -79,7 +83,6 @@ import {
 } from "./composerInlineChip";
 import { FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTerminalContexts";
-import { formatProviderSkillDisplayName } from "@t3tools/client-runtime/providerSkills";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { registerComposerInlineTokenPaste } from "./composerInlineTokenPaste";
 
@@ -212,38 +215,6 @@ class ComposerMentionNode extends DecoratorNode<React.ReactElement> {
 
 function $createComposerMentionNode(path: string): ComposerMentionNode {
   return $applyNodeReplacement(new ComposerMentionNode(path));
-}
-
-function resolveSkillDescription(
-  skill: Pick<ServerProviderSkill, "shortDescription" | "description">,
-): string | null {
-  const shortDescription = skill.shortDescription?.trim();
-  if (shortDescription) {
-    return shortDescription;
-  }
-  const description = skill.description?.trim();
-  return description || null;
-}
-
-type ComposerSkillMetadata = {
-  label: string;
-  description: string | null;
-};
-
-function skillMetadataByName(
-  skills: ReadonlyArray<ServerProviderSkill>,
-): ReadonlyMap<string, ComposerSkillMetadata> {
-  return new Map(
-    skills
-      .filter((skill) => skill.enabled)
-      .map((skill) => [
-        skill.name,
-        {
-          label: formatProviderSkillDisplayName(skill),
-          description: resolveSkillDescription(skill),
-        },
-      ]),
-  );
 }
 
 function ComposerSkillDecorator(props: { skillLabel: string; skillDescription: string | null }) {
@@ -880,6 +851,29 @@ function collectSkillInvocations(node: LexicalNode, offset = { value: 0 }): Skil
   return [];
 }
 
+function $readComposerSnapshot(
+  fallback: ComposerPromptEditorSnapshot,
+): ComposerPromptEditorSnapshot {
+  const value = $getRoot().getTextContent();
+  const collapsedCursorFallback = clampCollapsedComposerCursor(value, fallback.cursor);
+  const cursor = clampCollapsedComposerCursor(
+    value,
+    $readSelectionOffsetFromEditorState(collapsedCursorFallback),
+  );
+  const expandedCursorFallback = clampExpandedCursor(value, fallback.expandedCursor);
+  const expandedCursor = clampExpandedCursor(
+    value,
+    $readExpandedSelectionOffsetFromEditorState(expandedCursorFallback),
+  );
+  return {
+    value,
+    cursor,
+    expandedCursor,
+    terminalContextIds: collectTerminalContextIds($getRoot()),
+    skillInvocations: collectSkillInvocations($getRoot()),
+  };
+}
+
 export interface ComposerPromptEditorSnapshot {
   value: string;
   cursor: number;
@@ -1284,7 +1278,7 @@ function ComposerSurroundSelectionPlugin(props: {
 }) {
   const [editor] = useLexicalComposerContext();
   const terminalContextsRef = useRef(props.terminalContexts);
-  const skillMetadataRef = useRef(skillMetadataByName(props.skills));
+  const skillMetadataRef = useRef(reconcileComposerSkillMetadata({ skills: props.skills }));
   const pendingSurroundSelectionRef = useRef<{
     value: string;
     expandedStart: number;
@@ -1301,8 +1295,16 @@ function ComposerSurroundSelectionPlugin(props: {
   }, [props.terminalContexts]);
 
   useEffect(() => {
-    skillMetadataRef.current = skillMetadataByName(props.skills);
-  }, [props.skills]);
+    let selectedInvocations: SkillInvocation[] = [];
+    editor.getEditorState().read(() => {
+      selectedInvocations = collectSkillInvocations($getRoot());
+    });
+    skillMetadataRef.current = reconcileComposerSkillMetadata({
+      skills: props.skills,
+      selectedInvocations,
+      previousMetadata: skillMetadataRef.current,
+    });
+  }, [editor, props.skills]);
 
   const applySurroundInsertion = useEffectEvent((inputData: string): boolean => {
     const surroundCloseSymbol = SURROUND_SYMBOLS_MAP.get(inputData);
@@ -1565,7 +1567,6 @@ function ComposerPromptEditorInner({
   const terminalContextsSignatureRef = useRef(terminalContextsSignature);
   const skillsSignature = skillSignature(skills);
   const skillsSignatureRef = useRef(skillsSignature);
-  const skillMetadataRef = useRef(skillMetadataByName(skills));
   const snapshotRef = useRef({
     value,
     cursor: initialCursor,
@@ -1573,6 +1574,7 @@ function ComposerPromptEditorInner({
     terminalContextIds: terminalContexts.map((context) => context.id),
     skillInvocations: [] as SkillInvocation[],
   });
+  const skillMetadataRef = useRef(reconcileComposerSkillMetadata({ skills }));
   const isApplyingControlledUpdateRef = useRef(false);
   const terminalContextActions = useMemo(
     () => ({ onRemoveTerminalContext }),
@@ -1584,7 +1586,11 @@ function ComposerPromptEditorInner({
   }, [onChange]);
 
   useLayoutEffect(() => {
-    skillMetadataRef.current = skillMetadataByName(skills);
+    skillMetadataRef.current = reconcileComposerSkillMetadata({
+      skills,
+      selectedInvocations: snapshotRef.current.skillInvocations,
+      previousMetadata: skillMetadataRef.current,
+    });
   }, [skills]);
 
   useEffect(() => {
@@ -1667,29 +1673,7 @@ function ComposerPromptEditorInner({
   const readSnapshot = useCallback((): ComposerPromptEditorSnapshot => {
     let snapshot = snapshotRef.current;
     editor.getEditorState().read(() => {
-      const nextValue = $getRoot().getTextContent();
-      const fallbackCursor = clampCollapsedComposerCursor(nextValue, snapshotRef.current.cursor);
-      const nextCursor = clampCollapsedComposerCursor(
-        nextValue,
-        $readSelectionOffsetFromEditorState(fallbackCursor),
-      );
-      const fallbackExpandedCursor = clampExpandedCursor(
-        nextValue,
-        snapshotRef.current.expandedCursor,
-      );
-      const nextExpandedCursor = clampExpandedCursor(
-        nextValue,
-        $readExpandedSelectionOffsetFromEditorState(fallbackExpandedCursor),
-      );
-      const terminalContextIds = collectTerminalContextIds($getRoot());
-      const skillInvocations = collectSkillInvocations($getRoot());
-      snapshot = {
-        value: nextValue,
-        cursor: nextCursor,
-        expandedCursor: nextExpandedCursor,
-        terminalContextIds,
-        skillInvocations,
-      };
+      snapshot = $readComposerSnapshot(snapshotRef.current);
     });
     snapshotRef.current = snapshot;
     return snapshot;
@@ -1717,34 +1701,19 @@ function ComposerPromptEditorInner({
 
   const handleEditorChange = useCallback((editorState: EditorState) => {
     editorState.read(() => {
-      const nextValue = $getRoot().getTextContent();
-      const fallbackCursor = clampCollapsedComposerCursor(nextValue, snapshotRef.current.cursor);
-      const nextCursor = clampCollapsedComposerCursor(
-        nextValue,
-        $readSelectionOffsetFromEditorState(fallbackCursor),
-      );
-      const fallbackExpandedCursor = clampExpandedCursor(
-        nextValue,
-        snapshotRef.current.expandedCursor,
-      );
-      const nextExpandedCursor = clampExpandedCursor(
-        nextValue,
-        $readExpandedSelectionOffsetFromEditorState(fallbackExpandedCursor),
-      );
-      const terminalContextIds = collectTerminalContextIds($getRoot());
-      const skillInvocations = collectSkillInvocations($getRoot());
       const previousSnapshot = snapshotRef.current;
+      const nextSnapshot = $readComposerSnapshot(previousSnapshot);
       if (
-        previousSnapshot.value === nextValue &&
-        previousSnapshot.cursor === nextCursor &&
-        previousSnapshot.expandedCursor === nextExpandedCursor &&
-        previousSnapshot.terminalContextIds.length === terminalContextIds.length &&
+        previousSnapshot.value === nextSnapshot.value &&
+        previousSnapshot.cursor === nextSnapshot.cursor &&
+        previousSnapshot.expandedCursor === nextSnapshot.expandedCursor &&
+        previousSnapshot.terminalContextIds.length === nextSnapshot.terminalContextIds.length &&
         previousSnapshot.terminalContextIds.every(
-          (id, index) => id === terminalContextIds[index],
+          (id, index) => id === nextSnapshot.terminalContextIds[index],
         ) &&
-        previousSnapshot.skillInvocations.length === skillInvocations.length &&
+        previousSnapshot.skillInvocations.length === nextSnapshot.skillInvocations.length &&
         previousSnapshot.skillInvocations.every((invocation, index) => {
-          const next = skillInvocations[index];
+          const next = nextSnapshot.skillInvocations[index];
           return (
             next !== undefined &&
             invocation.name === next.name &&
@@ -1758,22 +1727,16 @@ function ComposerPromptEditorInner({
       if (isApplyingControlledUpdateRef.current) {
         return;
       }
-      snapshotRef.current = {
-        value: nextValue,
-        cursor: nextCursor,
-        expandedCursor: nextExpandedCursor,
-        terminalContextIds,
-        skillInvocations,
-      };
+      snapshotRef.current = nextSnapshot;
       const cursorAdjacentToMention =
-        isCollapsedCursorAdjacentToInlineToken(nextValue, nextCursor, "left") ||
-        isCollapsedCursorAdjacentToInlineToken(nextValue, nextCursor, "right");
+        isCollapsedCursorAdjacentToInlineToken(nextSnapshot.value, nextSnapshot.cursor, "left") ||
+        isCollapsedCursorAdjacentToInlineToken(nextSnapshot.value, nextSnapshot.cursor, "right");
       onChangeRef.current(
-        nextValue,
-        nextCursor,
-        nextExpandedCursor,
+        nextSnapshot.value,
+        nextSnapshot.cursor,
+        nextSnapshot.expandedCursor,
         cursorAdjacentToMention,
-        terminalContextIds,
+        nextSnapshot.terminalContextIds,
       );
     });
   }, []);
@@ -1835,7 +1798,7 @@ export function ComposerPromptEditor({
 }: ComposerPromptEditorProps) {
   const initialValueRef = useRef(value);
   const initialTerminalContextsRef = useRef(terminalContexts);
-  const initialSkillMetadataRef = useRef(skillMetadataByName(skills));
+  const initialSkillMetadataRef = useRef(reconcileComposerSkillMetadata({ skills }));
   const initialConfig = useMemo<InitialConfigType>(
     () => ({
       namespace: "t3tools-composer-editor",

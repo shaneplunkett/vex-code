@@ -6,6 +6,7 @@ import {
   composerSubmissionIntentForEnter,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  getUnavailableSkillInvocationNames,
   isCollapsedCursorAdjacentToInlineToken,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
@@ -66,6 +67,26 @@ describe("composerSubmissionIntentForEnter", () => {
         isDraftThread: false,
       }),
     ).toBe("foreground");
+  });
+});
+
+describe("getUnavailableSkillInvocationNames", () => {
+  it("reports a selected skill removed by provider discovery", () => {
+    expect(
+      getUnavailableSkillInvocationNames({
+        skillInvocations: [{ name: "handoff", start: 6, end: 14 }],
+        skills: [],
+      }),
+    ).toEqual(["handoff"]);
+  });
+
+  it("accepts selected skills that remain enabled", () => {
+    expect(
+      getUnavailableSkillInvocationNames({
+        skillInvocations: [{ name: "handoff", start: 6, end: 14 }],
+        skills: [{ name: "handoff", path: "/skills/handoff/SKILL.md", enabled: true }],
+      }),
+    ).toEqual([]);
   });
 });
 

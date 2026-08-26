@@ -1,5 +1,6 @@
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
+import type { ServerProviderSkill, SkillInvocation } from "@t3tools/contracts";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
@@ -10,6 +11,22 @@ export interface ComposerTrigger {
   query: string;
   rangeStart: number;
   rangeEnd: number;
+}
+
+export function getUnavailableSkillInvocationNames(input: {
+  skillInvocations: ReadonlyArray<SkillInvocation>;
+  skills: ReadonlyArray<ServerProviderSkill>;
+}): string[] {
+  const enabledSkillNames = new Set(
+    input.skills.filter((skill) => skill.enabled).map((skill) => skill.name),
+  );
+  return [
+    ...new Set(
+      input.skillInvocations
+        .map((invocation) => invocation.name)
+        .filter((name) => !enabledSkillNames.has(name)),
+    ),
+  ];
 }
 
 export function composerSubmissionIntentForEnter(input: {
