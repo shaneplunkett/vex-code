@@ -6,6 +6,7 @@ import {
   type ModelSelection,
   type ProviderDriverKind,
   type ServerProvider,
+  type SkillInvocation,
   type ScopedProjectRef,
   type ScopedThreadRef,
   type ThreadId,
@@ -30,6 +31,67 @@ export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
+
+const SKILL_INVOCATION_MARKER_PREFIX = "\u{F0000}t3-skill-invocation:";
+
+/**
+ * Carries semantic skill ranges through the text-only context and effort
+ * formatters without asking those formatters to understand composer nodes.
+ */
+export function mapSkillInvocationsThroughPromptTransform(input: {
+  readonly text: string;
+  readonly skillInvocations: ReadonlyArray<SkillInvocation>;
+  readonly transform: (markedText: string) => string;
+}): { readonly text: string; readonly skillInvocations: SkillInvocation[] } {
+  if (input.skillInvocations.length === 0) {
+    return { text: input.transform(input.text), skillInvocations: [] };
+  }
+
+  const invocations = [...input.skillInvocations].sort((left, right) => left.start - right.start);
+  let previousEnd = 0;
+  let markedText = "";
+  const markedInvocations = invocations.map((invocation, index) => {
+    const source = `$${invocation.name}`;
+    if (
+      invocation.start < previousEnd ||
+      invocation.end <= invocation.start ||
+      input.text.slice(invocation.start, invocation.end) !== source
+    ) {
+      throw new Error(`Invalid composer skill invocation range for '${invocation.name}'.`);
+    }
+    const marker = `${SKILL_INVOCATION_MARKER_PREFIX}${index}\u{F0001}`;
+    if (input.text.includes(marker)) {
+      throw new Error("Composer text contains a reserved skill invocation marker.");
+    }
+    markedText += input.text.slice(previousEnd, invocation.start) + marker;
+    previousEnd = invocation.end;
+    return { invocation, marker, source };
+  });
+  markedText += input.text.slice(previousEnd);
+
+  const transformed = input.transform(markedText);
+  let transformedOffset = 0;
+  let canonicalText = "";
+  const mappedInvocations: SkillInvocation[] = [];
+  for (const marked of markedInvocations) {
+    const markerStart = transformed.indexOf(marked.marker, transformedOffset);
+    if (markerStart < transformedOffset) {
+      throw new Error(`Prompt formatting removed skill invocation '${marked.invocation.name}'.`);
+    }
+    canonicalText += transformed.slice(transformedOffset, markerStart);
+    const start = canonicalText.length;
+    canonicalText += marked.source;
+    mappedInvocations.push({
+      name: marked.invocation.name,
+      start,
+      end: canonicalText.length,
+    });
+    transformedOffset = markerStart + marked.marker.length;
+  }
+  canonicalText += transformed.slice(transformedOffset);
+
+  return { text: canonicalText, skillInvocations: mappedInvocations };
+}
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 

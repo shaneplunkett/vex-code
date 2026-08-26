@@ -341,6 +341,7 @@ import {
   cloneComposerImageForRetry,
   deriveLockedProvider,
   readFileAsDataUrl,
+  mapSkillInvocationsThroughPromptTransform,
   reconcileMountedTerminalThreadIds,
   resolveBackgroundDraftWorkspaceOptions,
   resolveDraftHeroState,
@@ -5235,6 +5236,8 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const {
+      prompt: sendContextPrompt,
+      skillInvocations: composerSkillInvocations,
       images: sendContextImages,
       terminalContexts: composerTerminalContexts,
       elementContexts: composerElementContexts,
@@ -5266,7 +5269,7 @@ function ChatViewContent(props: ChatViewProps) {
             },
           ]
         : sendContextPreviewAnnotations;
-    const promptForSend = promptRef.current;
+    const promptForSend = sendContextPrompt;
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -5500,25 +5503,32 @@ function ChatViewContent(props: ChatViewProps) {
     const composerElementContextsSnapshot = [...composerElementContexts];
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
-    const messageTextWithContexts = appendElementContextsToPrompt(
-      appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
-      composerElementContextsSnapshot,
-    );
-    const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
-      (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
-      messageTextWithContexts,
-    );
-    const messageTextForSend = appendReviewCommentsToPrompt(
-      messageTextWithPreviewAnnotations,
-      composerReviewCommentsSnapshot,
-    );
-    const outgoingMessageText = formatOutgoingPrompt({
-      provider: ctxSelectedProvider,
-      model: ctxSelectedModel,
-      models: ctxSelectedProviderModels,
-      effort: ctxSelectedPromptEffort,
-      text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+    const outgoingPrompt = mapSkillInvocationsThroughPromptTransform({
+      text: promptForSend,
+      skillInvocations: composerSkillInvocations,
+      transform: (semanticPrompt) => {
+        const messageTextWithContexts = appendElementContextsToPrompt(
+          appendTerminalContextsToPrompt(semanticPrompt, composerTerminalContextsSnapshot),
+          composerElementContextsSnapshot,
+        );
+        const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
+          (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
+          messageTextWithContexts,
+        );
+        const messageTextForSend = appendReviewCommentsToPrompt(
+          messageTextWithPreviewAnnotations,
+          composerReviewCommentsSnapshot,
+        );
+        return formatOutgoingPrompt({
+          provider: ctxSelectedProvider,
+          model: ctxSelectedModel,
+          models: ctxSelectedProviderModels,
+          effort: ctxSelectedPromptEffort,
+          text: messageTextForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+        });
+      },
     });
+    const outgoingMessageText = outgoingPrompt.text;
     if (composerRef.current?.validateProviderInput(outgoingMessageText) === false) {
       return;
     }
@@ -5755,6 +5765,9 @@ function ChatViewContent(props: ChatViewProps) {
             text: outgoingMessageText,
             attachments: turnAttachmentsResult.value,
           },
+          ...(outgoingPrompt.skillInvocations.length > 0
+            ? { skillInvocations: outgoingPrompt.skillInvocations }
+            : {}),
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
           runtimeMode,

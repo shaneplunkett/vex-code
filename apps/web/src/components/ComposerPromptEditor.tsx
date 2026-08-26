@@ -5,7 +5,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { type ServerProviderSkill } from "@t3tools/contracts";
+import { type ServerProviderSkill, type SkillInvocation } from "@t3tools/contracts";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import {
   $applyNodeReplacement,
@@ -234,13 +234,15 @@ function skillMetadataByName(
   skills: ReadonlyArray<ServerProviderSkill>,
 ): ReadonlyMap<string, ComposerSkillMetadata> {
   return new Map(
-    skills.map((skill) => [
-      skill.name,
-      {
-        label: formatProviderSkillDisplayName(skill),
-        description: resolveSkillDescription(skill),
-      },
-    ]),
+    skills
+      .filter((skill) => skill.enabled)
+      .map((skill) => [
+        skill.name,
+        {
+          label: formatProviderSkillDisplayName(skill),
+          description: resolveSkillDescription(skill),
+        },
+      ]),
   );
 }
 
@@ -836,13 +838,13 @@ function $setComposerEditorPrompt(
     }
     if (segment.type === "skill") {
       const metadata = skillMetadata.get(segment.name);
-      paragraph.append(
-        $createComposerSkillNode(
-          segment.name,
-          metadata?.label ?? formatProviderSkillDisplayName({ name: segment.name }),
-          metadata?.description ?? null,
-        ),
-      );
+      if (metadata) {
+        paragraph.append(
+          $createComposerSkillNode(segment.name, metadata.label, metadata.description),
+        );
+      } else {
+        paragraph.append($createTextNode(`$${segment.name}`));
+      }
       continue;
     }
     if (segment.type === "terminal-context") {
@@ -865,16 +867,32 @@ function collectTerminalContextIds(node: LexicalNode): string[] {
   return [];
 }
 
+function collectSkillInvocations(node: LexicalNode, offset = { value: 0 }): SkillInvocation[] {
+  if (node instanceof ComposerSkillNode) {
+    const start = offset.value;
+    offset.value += node.getTextContentSize();
+    return [{ name: node.__skillName, start, end: offset.value }];
+  }
+  if ($isElementNode(node)) {
+    return node.getChildren().flatMap((child) => collectSkillInvocations(child, offset));
+  }
+  offset.value += node.getTextContentSize();
+  return [];
+}
+
+export interface ComposerPromptEditorSnapshot {
+  value: string;
+  cursor: number;
+  expandedCursor: number;
+  terminalContextIds: string[];
+  skillInvocations: SkillInvocation[];
+}
+
 export interface ComposerPromptEditorHandle {
   focus: () => void;
   focusAt: (cursor: number) => void;
   focusAtEnd: () => void;
-  readSnapshot: () => {
-    value: string;
-    cursor: number;
-    expandedCursor: number;
-    terminalContextIds: string[];
-  };
+  readSnapshot: () => ComposerPromptEditorSnapshot;
 }
 
 interface ComposerPromptEditorProps {
@@ -1553,6 +1571,7 @@ function ComposerPromptEditorInner({
     cursor: initialCursor,
     expandedCursor: expandCollapsedComposerCursor(value, initialCursor),
     terminalContextIds: terminalContexts.map((context) => context.id),
+    skillInvocations: [] as SkillInvocation[],
   });
   const isApplyingControlledUpdateRef = useRef(false);
   const terminalContextActions = useMemo(
@@ -1591,6 +1610,7 @@ function ComposerPromptEditorInner({
       cursor: normalizedCursor,
       expandedCursor: expandCollapsedComposerCursor(value, normalizedCursor),
       terminalContextIds: terminalContexts.map((context) => context.id),
+      skillInvocations: previousSnapshot.skillInvocations,
     };
     terminalContextsSignatureRef.current = terminalContextsSignature;
     skillsSignatureRef.current = skillsSignature;
@@ -1631,6 +1651,7 @@ function ComposerPromptEditorInner({
         cursor: boundedCursor,
         expandedCursor: expandCollapsedComposerCursor(snapshotRef.current.value, boundedCursor),
         terminalContextIds: snapshotRef.current.terminalContextIds,
+        skillInvocations: snapshotRef.current.skillInvocations,
       };
       onChangeRef.current(
         snapshotRef.current.value,
@@ -1643,12 +1664,7 @@ function ComposerPromptEditorInner({
     [editor],
   );
 
-  const readSnapshot = useCallback((): {
-    value: string;
-    cursor: number;
-    expandedCursor: number;
-    terminalContextIds: string[];
-  } => {
+  const readSnapshot = useCallback((): ComposerPromptEditorSnapshot => {
     let snapshot = snapshotRef.current;
     editor.getEditorState().read(() => {
       const nextValue = $getRoot().getTextContent();
@@ -1666,11 +1682,13 @@ function ComposerPromptEditorInner({
         $readExpandedSelectionOffsetFromEditorState(fallbackExpandedCursor),
       );
       const terminalContextIds = collectTerminalContextIds($getRoot());
+      const skillInvocations = collectSkillInvocations($getRoot());
       snapshot = {
         value: nextValue,
         cursor: nextCursor,
         expandedCursor: nextExpandedCursor,
         terminalContextIds,
+        skillInvocations,
       };
     });
     snapshotRef.current = snapshot;
@@ -1714,13 +1732,26 @@ function ComposerPromptEditorInner({
         $readExpandedSelectionOffsetFromEditorState(fallbackExpandedCursor),
       );
       const terminalContextIds = collectTerminalContextIds($getRoot());
+      const skillInvocations = collectSkillInvocations($getRoot());
       const previousSnapshot = snapshotRef.current;
       if (
         previousSnapshot.value === nextValue &&
         previousSnapshot.cursor === nextCursor &&
         previousSnapshot.expandedCursor === nextExpandedCursor &&
         previousSnapshot.terminalContextIds.length === terminalContextIds.length &&
-        previousSnapshot.terminalContextIds.every((id, index) => id === terminalContextIds[index])
+        previousSnapshot.terminalContextIds.every(
+          (id, index) => id === terminalContextIds[index],
+        ) &&
+        previousSnapshot.skillInvocations.length === skillInvocations.length &&
+        previousSnapshot.skillInvocations.every((invocation, index) => {
+          const next = skillInvocations[index];
+          return (
+            next !== undefined &&
+            invocation.name === next.name &&
+            invocation.start === next.start &&
+            invocation.end === next.end
+          );
+        })
       ) {
         return;
       }
@@ -1732,6 +1763,7 @@ function ComposerPromptEditorInner({
         cursor: nextCursor,
         expandedCursor: nextExpandedCursor,
         terminalContextIds,
+        skillInvocations,
       };
       const cursorAdjacentToMention =
         isCollapsedCursorAdjacentToInlineToken(nextValue, nextCursor, "left") ||

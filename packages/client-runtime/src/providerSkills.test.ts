@@ -58,12 +58,10 @@ describe("getProviderSlashCommandsForSlashMenu", () => {
     ).toEqual(["compact"]);
   });
 
-  it("keeps the provider command when the matching skill alias is hidden", () => {
-    const visibleSkills = getProviderSkillsForSlashMenu(skills, false);
-
+  it("keeps provider skill commands out when the optional slash skill aliases are hidden", () => {
     expect(
-      getProviderSlashCommandsForSlashMenu(commands, visibleSkills).map((command) => command.name),
-    ).toEqual(["ask-matt", "compact"]);
+      getProviderSlashCommandsForSlashMenu(commands, skills).map((command) => command.name),
+    ).toEqual(["compact"]);
   });
 });
 

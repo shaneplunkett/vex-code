@@ -7,6 +7,7 @@ import type {
   ProviderInteractionMode,
   ResolvedKeybindingsConfig,
   RuntimeMode,
+  SkillInvocation,
   ScopedThreadRef,
   ServerProvider,
   ThreadId,
@@ -508,6 +509,7 @@ export interface ChatComposerHandle {
     cursor: number;
     expandedCursor: number;
     terminalContextIds: string[];
+    skillInvocations: SkillInvocation[];
   };
   /** Reset composer cursor/trigger/highlight after external prompt mutations (e.g. onSend). */
   resetCursorState: (options?: {
@@ -520,6 +522,7 @@ export interface ChatComposerHandle {
   /** Get the current prompt/effort/model state for use in send. */
   getSendContext: () => {
     prompt: string;
+    skillInvocations: SkillInvocation[];
     images: ComposerImageAttachment[];
     terminalContexts: TerminalContextDraft[];
     elementContexts: ElementContextDraft[];
@@ -1156,7 +1159,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       );
       const providerSlashCommandItems = getProviderSlashCommandsForSlashMenu(
         selectedProviderStatus?.slashCommands ?? [],
-        slashMenuSkills,
+        selectedProviderStatus?.skills ?? [],
       ).map((command) => ({
         id: `provider-slash-command:${selectedProvider}:${command.name}`,
         type: "provider-slash-command" as const,
@@ -1754,6 +1757,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     cursor: number;
     expandedCursor: number;
     terminalContextIds: string[];
+    skillInvocations: SkillInvocation[];
   } => {
     const editorSnapshot = composerEditorRef.current?.readSnapshot();
     if (editorSnapshot) {
@@ -1764,6 +1768,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       cursor: composerCursor,
       expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
       terminalContextIds: composerTerminalContexts.map((context) => context.id),
+      skillInvocations: [],
     };
   }, [composerCursor, composerTerminalContexts, promptRef]);
 
@@ -2811,21 +2816,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           composerEditorRef.current?.focusAt(nextCollapsedCursor);
         });
       },
-      getSendContext: () => ({
-        prompt: promptRef.current,
-        images: composerImagesRef.current,
-        terminalContexts: composerTerminalContextsRef.current,
-        elementContexts: composerElementContextsRef.current,
-        previewAnnotations: composerPreviewAnnotations,
-        reviewComments: composerReviewComments,
-        selectedPromptEffort,
-        selectedModelOptionsForDispatch,
-        selectedModelSelection,
-        providerAvailable: !noProviderAvailable,
-        selectedProvider,
-        selectedModel,
-        selectedProviderModels,
-      }),
+      getSendContext: () => {
+        const snapshot = readComposerSnapshot();
+        return {
+          prompt: snapshot.value,
+          skillInvocations: snapshot.skillInvocations,
+          images: composerImagesRef.current,
+          terminalContexts: composerTerminalContextsRef.current,
+          elementContexts: composerElementContextsRef.current,
+          previewAnnotations: composerPreviewAnnotations,
+          reviewComments: composerReviewComments,
+          selectedPromptEffort,
+          selectedModelOptionsForDispatch,
+          selectedModelSelection,
+          providerAvailable: !noProviderAvailable,
+          selectedProvider,
+          selectedModel,
+          selectedProviderModels,
+        };
+      },
       validateProviderInput: (providerInput: string) => {
         const validationMessage = getComposerSubmissionValidationMessage({
           prompt: promptRef.current,

@@ -301,4 +301,42 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
       assert.deepEqual(skills, []);
     }),
   );
+
+  it.effect("keeps user-only skills invocable while honouring disabled overrides", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const configDir = path.join(tempDir, "claude-home");
+
+      yield* writeSkill(
+        path.join(configDir, "skills"),
+        "grilling",
+        ["---", "name: grilling", "disable-model-invocation: true", "---"].join("\n"),
+      );
+      yield* writeSkill(
+        path.join(configDir, "skills"),
+        "disabled",
+        ["---", "name: disabled", "---"].join("\n"),
+      );
+      yield* fs.writeFileString(
+        path.join(configDir, "settings.json"),
+        '{ "skillOverrides": { "disabled": "off" } }',
+      );
+
+      const skills = yield* discoverClaudeSkills({ homePath: configDir });
+
+      assert.deepEqual(
+        skills.map(({ name, enabled, userInvocationOnly }) => ({
+          name,
+          enabled,
+          userInvocationOnly,
+        })),
+        [
+          { name: "disabled", enabled: false, userInvocationOnly: undefined },
+          { name: "grilling", enabled: true, userInvocationOnly: true },
+        ],
+      );
+    }),
+  );
 });
