@@ -35,6 +35,7 @@ type SkillFrontmatter =
       readonly name?: string;
       readonly description?: string;
       readonly userInvocationOnly?: boolean;
+      readonly userInvocable?: boolean;
     };
 
 function parseSkillFrontmatter(contents: string): SkillFrontmatter {
@@ -61,6 +62,7 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
     ...(name ? { name } : {}),
     ...(description ? { description } : {}),
     ...(record["disable-model-invocation"] === true ? { userInvocationOnly: true } : {}),
+    ...(record["user-invocable"] === false ? { userInvocable: false } : {}),
   };
 }
 
@@ -205,7 +207,9 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
       skillsByName.set(name, {
         name,
         path: skillPath,
-        enabled: skillOverrides.get(name) ?? true,
+        enabled:
+          (skillOverrides.get(name) ?? true) &&
+          !(frontmatter.kind === "parsed" && frontmatter.userInvocable === false),
         scope: root.scope,
         ...(frontmatter.kind === "parsed" && frontmatter.description
           ? { description: frontmatter.description }

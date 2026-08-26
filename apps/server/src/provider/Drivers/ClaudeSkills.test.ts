@@ -319,6 +319,11 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
         "disabled",
         ["---", "name: disabled", "---"].join("\n"),
       );
+      yield* writeSkill(
+        path.join(configDir, "skills"),
+        "model-only",
+        ["---", "name: model-only", "user-invocable: false", "---"].join("\n"),
+      );
       yield* fs.writeFileString(
         path.join(configDir, "settings.json"),
         '{ "skillOverrides": { "disabled": "off" } }',
@@ -335,6 +340,7 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
         [
           { name: "disabled", enabled: false, userInvocationOnly: undefined },
           { name: "grilling", enabled: true, userInvocationOnly: true },
+          { name: "model-only", enabled: false, userInvocationOnly: undefined },
         ],
       );
     }),

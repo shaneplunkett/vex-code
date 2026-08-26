@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   formatProviderSkillDisplayName,
   getProviderSlashCommandsForSlashMenu,
-  getProviderSkillsForSlashMenu,
   resolveProviderSkillSourceKind,
 } from "./providerSkills.ts";
 
@@ -26,19 +25,6 @@ describe("formatProviderSkillDisplayName", () => {
   });
 });
 
-describe("getProviderSkillsForSlashMenu", () => {
-  it("keeps the skill alias when the provider also exposes it as a slash command", () => {
-    const askMatt = {
-      name: "ask-matt",
-      path: "/Users/matt/.agents/skills/ask-matt/SKILL.md",
-      enabled: true,
-    };
-    expect(getProviderSkillsForSlashMenu([askMatt], true).map((skill) => skill.name)).toEqual([
-      "ask-matt",
-    ]);
-  });
-});
-
 describe("getProviderSlashCommandsForSlashMenu", () => {
   const commands = [
     { name: "ask-matt", description: "Ask which skill fits your situation." },
@@ -52,13 +38,7 @@ describe("getProviderSlashCommandsForSlashMenu", () => {
     },
   ];
 
-  it("lets the skill alias win when a provider command has the same name", () => {
-    expect(
-      getProviderSlashCommandsForSlashMenu(commands, skills).map((command) => command.name),
-    ).toEqual(["compact"]);
-  });
-
-  it("keeps provider skill commands out when the optional slash skill aliases are hidden", () => {
+  it("keeps provider-native skill commands out of the command-only slash menu", () => {
     expect(
       getProviderSlashCommandsForSlashMenu(commands, skills).map((command) => command.name),
     ).toEqual(["compact"]);

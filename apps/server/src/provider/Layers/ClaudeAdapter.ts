@@ -76,7 +76,10 @@ import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
-import { resolveClaudeSkillInvocations } from "../skillInvocations.ts";
+import {
+  requireResolvedSkillInvocationInput,
+  resolveClaudeSkillInvocations,
+} from "../skillInvocations.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
   getClaudeModelCapabilities,
@@ -4426,19 +4429,16 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   );
 
   const sendTurn: ClaudeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
-    const resolvedSkillInvocations = resolveClaudeSkillInvocations(input);
-    if (!resolvedSkillInvocations.ok) {
-      return yield* new ProviderAdapterRequestError({
+    const resolvedSkillInput = yield* requireResolvedSkillInvocationInput(
+      resolveClaudeSkillInvocations(input),
+      {
         provider: PROVIDER,
         method: "turn/start",
-        detail: resolvedSkillInvocations.detail,
-      });
-    }
+      },
+    );
     const loweredInput: ProviderSendTurnInput = {
       ...input,
-      ...(resolvedSkillInvocations.input !== undefined
-        ? { input: resolvedSkillInvocations.input }
-        : {}),
+      ...(resolvedSkillInput !== undefined ? { input: resolvedSkillInput } : {}),
       skillInvocations: [],
     };
     const context = yield* requireSession(input.threadId);

@@ -853,7 +853,7 @@ describe("ClaudeAdapterLive", () => {
       const promptText = yield* Effect.promise(() =>
         readFirstPromptText(harness.getLastCreateQueryInput()),
       );
-      assert.equal(promptText, "/implement ok, now all the tickets");
+      assert.equal(promptText, "/implement ok, now implement all the tickets");
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

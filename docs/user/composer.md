@@ -17,17 +17,15 @@ canonical `$name` in the timeline and translates it to the provider's native inv
 turn starts. If a provider cannot preserve the selected invocation, the turn fails with a visible
 error instead of sending `$name` as inert prose.
 
-By default, the `/` menu includes skills. To keep this menu command-only, turn off **Show skills in
-slash menu** in **Settings → General**. Skill results use the `/skill:Skill Name` label and add the
-same `$name` skill token to your message. The original skill name remains searchable. If the provider
-also reports that skill as a native slash command, T3 Code hides the duplicate native entry and keeps
-the `/skill:Skill Name` label.
+The `/` menu is command-only. If a provider also reports one of its skills as a native slash command,
+T3 Code hides that entry so explicit skill invocation stays under the canonical `$` picker.
 
 Claude currently supports one explicit skill per message and cannot combine that invocation with an
 image attachment. T3 Code rejects those combinations clearly; send multiple skills in separate turns,
 or invoke the skill first and attach images in a follow-up. Skills marked
 `disable-model-invocation: true` are still available to the `$` picker because the user is explicitly
-invoking them. Skills switched off through Claude's `skillOverrides` stay hidden.
+invoking them. Skills switched off through Claude's `skillOverrides`, or marked
+`user-invocable: false`, stay hidden.
 
 On desktop, press `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux from a new thread to
 start it in the background. T3 Code opens another new thread and shows an **Open** action for the

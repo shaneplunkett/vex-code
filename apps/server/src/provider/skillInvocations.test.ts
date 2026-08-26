@@ -33,7 +33,31 @@ describe("provider skill invocation lowering", () => {
         input: canonical,
         skillInvocations: [invocation],
       }),
-    ).toEqual({ ok: true, input: "/implement ok, now all the tickets" });
+    ).toEqual({ ok: true, input: "/implement ok, now implement all the tickets" });
+  });
+
+  it("preserves inline grammar and whitespace in Claude command arguments", () => {
+    const input = "Please use:\n\n$implement\n\nfor every ticket.";
+    const start = input.indexOf("$implement");
+
+    expect(
+      resolveClaudeSkillInvocations({
+        threadId,
+        input,
+        skillInvocations: [{ name: "implement", start, end: start + "$implement".length }],
+      }),
+    ).toEqual({
+      ok: true,
+      input: "/implement Please use:\n\nimplement\n\nfor every ticket.",
+    });
+
+    expect(
+      resolveClaudeSkillInvocations({
+        threadId,
+        input: "$implement",
+        skillInvocations: [{ name: "implement", start: 0, end: "$implement".length }],
+      }),
+    ).toEqual({ ok: true, input: "/implement" });
   });
 
   it("rejects Claude combinations that its command expansion cannot preserve", () => {

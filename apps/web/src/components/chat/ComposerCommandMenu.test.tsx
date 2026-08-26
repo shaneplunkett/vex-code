@@ -97,40 +97,4 @@ describe("ComposerCommandMenu", () => {
     expect(markup).toContain("<svg");
     expect(markup.indexOf('data-slot="badge"')).toBeLessThan(markup.indexOf("<svg"));
   });
-
-  it("keeps slash skills aligned with the source icon inside the badge", () => {
-    const markup = renderToStaticMarkup(
-      <ComposerCommandMenu
-        items={[
-          {
-            id: "skill:codex:ask-matt",
-            type: "skill",
-            provider: ProviderDriverKind.make("codex"),
-            skill: {
-              name: "ask-matt",
-              displayName: "Ask Matt",
-              path: "/skills/ask-matt/SKILL.md",
-              scope: "repo",
-              enabled: true,
-            },
-            label: "/skill:ask-matt",
-            description: "Find the right skill or workflow",
-          },
-        ]}
-        resolvedTheme="dark"
-        isLoading={false}
-        triggerKind="slash-command"
-        activeItemId="skill:codex:ask-matt"
-        onHighlightedItemChange={() => {}}
-        onSelect={() => {}}
-      />,
-    );
-
-    expect(markup).toContain('<span class="text-secondary-label">/skill:</span>Ask Matt');
-    expect(markup).toContain('data-slot="badge"');
-    expect(markup).toContain("lucide-folder");
-    expect(markup).toContain(">Repo</span>");
-    expect(markup).toContain("Find the right skill or workflow");
-    expect(markup).not.toContain("font-medium text-secondary-label");
-  });
 });

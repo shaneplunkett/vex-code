@@ -104,7 +104,11 @@ import {
   shouldUseCompactComposerPrimaryActions,
   shouldUseCompactComposerFooter,
 } from "../composerFooterLayout";
-import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
+import {
+  type ComposerPromptEditorHandle,
+  type ComposerPromptEditorSnapshot,
+  ComposerPromptEditor,
+} from "../ComposerPromptEditor";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
@@ -267,7 +271,6 @@ import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
 import {
   formatProviderSkillDisplayName,
   getProviderSlashCommandsForSlashMenu,
-  getProviderSkillsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -504,13 +507,7 @@ export interface ChatComposerHandle {
   openModelPicker: () => void;
   toggleModelPicker: () => void;
   isModelPickerOpen: () => boolean;
-  readSnapshot: () => {
-    value: string;
-    cursor: number;
-    expandedCursor: number;
-    terminalContextIds: string[];
-    skillInvocations: SkillInvocation[];
-  };
+  readSnapshot: () => ComposerPromptEditorSnapshot;
   /** Reset composer cursor/trigger/highlight after external prompt mutations (e.g. onSend). */
   resetCursorState: (options?: {
     cursor?: number;
@@ -1153,10 +1150,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             ] as const)
           : []),
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
-      const slashMenuSkills = getProviderSkillsForSlashMenu(
-        selectedProviderStatus?.skills ?? [],
-        settings.showSkillsInSlashMenu,
-      );
       const providerSlashCommandItems = getProviderSlashCommandsForSlashMenu(
         selectedProviderStatus?.slashCommands ?? [],
         selectedProviderStatus?.skills ?? [],
@@ -1169,22 +1162,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         description: command.description ?? command.input?.hint ?? "Run provider command",
       }));
       const query = composerTrigger.query.trim().toLowerCase();
-      const skillItems = slashMenuSkills.map((skill) => ({
-        id: `skill:${selectedProvider}:${skill.name}`,
-        type: "skill" as const,
-        provider: selectedProvider,
-        skill,
-        label: `/skill:${skill.name}`,
-        description:
-          skill.shortDescription ??
-          skill.description ??
-          (skill.scope ? `${skill.scope} skill` : ""),
-      }));
-      const slashCommandItems = [
-        ...builtInSlashCommandItems,
-        ...providerSlashCommandItems,
-        ...skillItems,
-      ];
+      const slashCommandItems = [...builtInSlashCommandItems, ...providerSlashCommandItems];
       return searchSlashCommandItems(slashCommandItems, query);
     }
     if (composerTrigger.kind === "skill") {
@@ -1208,7 +1186,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     planModeUiEnabled,
     selectedProvider,
     selectedProviderStatus,
-    settings.showSkillsInSlashMenu,
     workspaceEntries.entries,
   ]);
 
@@ -1752,13 +1729,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     ],
   );
 
-  const readComposerSnapshot = useCallback((): {
-    value: string;
-    cursor: number;
-    expandedCursor: number;
-    terminalContextIds: string[];
-    skillInvocations: SkillInvocation[];
-  } => {
+  const readComposerSnapshot = useCallback((): ComposerPromptEditorSnapshot => {
     const editorSnapshot = composerEditorRef.current?.readSnapshot();
     if (editorSnapshot) {
       return editorSnapshot;

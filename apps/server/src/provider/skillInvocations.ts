@@ -1,8 +1,32 @@
-import type { ProviderSendTurnInput, SkillInvocation } from "@t3tools/contracts";
+import type {
+  ProviderDriverKind,
+  ProviderSendTurnInput,
+  SkillInvocation,
+} from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+
+import { ProviderAdapterRequestError } from "./Errors.ts";
 
 export type SkillInvocationResolution =
   | { readonly ok: true; readonly input: string | undefined }
   | { readonly ok: false; readonly detail: string };
+
+export function requireResolvedSkillInvocationInput(
+  resolution: SkillInvocationResolution,
+  request: {
+    readonly provider: ProviderDriverKind;
+    readonly method: string;
+  },
+): Effect.Effect<string | undefined, ProviderAdapterRequestError> {
+  return resolution.ok
+    ? Effect.succeed(resolution.input)
+    : Effect.fail(
+        new ProviderAdapterRequestError({
+          ...request,
+          detail: resolution.detail,
+        }),
+      );
+}
 
 function validateCanonicalSkillInvocations(input: {
   readonly text: string | undefined;
@@ -73,9 +97,13 @@ export function resolveClaudeSkillInvocations(
 
   const invocation = validated.invocations[0]!;
   const text = input.input!;
-  const before = text.slice(0, invocation.start).trimEnd();
-  const after = text.slice(invocation.end).trimStart();
-  const argumentsText = before && after ? `${before} ${after}` : before || after;
+  const before = text.slice(0, invocation.start);
+  const after = text.slice(invocation.end);
+  const surroundingText = before + after;
+  // The command at position zero carries the invocation. Keeping the skill
+  // name as ordinary argument text preserves the grammar and exact whitespace
+  // of an inline sentence without asking Claude to interpret an inert `$name`.
+  const argumentsText = surroundingText.trim() ? before + invocation.name + after : "";
   return {
     ok: true,
     input: argumentsText ? `/${invocation.name} ${argumentsText}` : `/${invocation.name}`,

@@ -25,13 +25,6 @@ export function formatProviderSkillDisplayName(
   return titleCaseWords(skill.name);
 }
 
-export function getProviderSkillsForSlashMenu(
-  skills: ReadonlyArray<ServerProviderSkill>,
-  showSkillsInSlashMenu: boolean,
-): ServerProviderSkill[] {
-  return showSkillsInSlashMenu ? skills.filter((skill) => skill.enabled) : [];
-}
-
 export function getProviderSlashCommandsForSlashMenu(
   slashCommands: ReadonlyArray<ServerProviderSlashCommand>,
   skills: ReadonlyArray<ServerProviderSkill>,
