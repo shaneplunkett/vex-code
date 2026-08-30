@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getMobileThemeVariables, MOBILE_THEME_OPTIONS } from "../lib/mobileTheme";
-import { DEFAULT_MOBILE_THEME_VARIABLES } from "../lib/mobileDefaultTheme";
+import { MOBILE_THEME_OPTIONS } from "../lib/mobileTheme";
+import { readDefaultMobileThemeVariables } from "../lib/mobileTheme.test-support";
+import { getMobileThemeRuntimeVariables } from "../lib/mobileThemeVariables";
 import {
   resolveVexMobileReviewDiffTheme,
   resolveVexMobileTerminalTheme,
@@ -13,9 +14,10 @@ describe("Vex mobile colour theme", () => {
   it("provides every upstream semantic colour in Latte and Mocha", () => {
     for (const scheme of ["light", "dark"] as const) {
       expect(Object.keys(VEX_MOBILE_THEME_VARIABLES[scheme]).sort()).toEqual(
-        Object.keys(DEFAULT_MOBILE_THEME_VARIABLES[scheme]).sort(),
+        Object.keys(readDefaultMobileThemeVariables(scheme)).sort(),
       );
-      expect(getMobileThemeVariables("t3-code", scheme)).toEqual(
+      expect(readDefaultMobileThemeVariables(scheme)).toEqual(VEX_MOBILE_THEME_VARIABLES[scheme]);
+      expect(getMobileThemeRuntimeVariables("t3-code", scheme)).toEqual(
         VEX_MOBILE_THEME_VARIABLES[scheme],
       );
     }

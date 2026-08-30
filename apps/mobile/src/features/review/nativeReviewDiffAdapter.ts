@@ -10,8 +10,8 @@ import { resolveMobileCodeSurface } from "../../lib/appearancePreferences";
 import { MOBILE_CODE_SURFACE } from "../../lib/typography";
 import {
   DEFAULT_MOBILE_THEME_ID,
-  getMobileThemeVariables,
   type MobileThemeId,
+  type MobileThemeVariables,
 } from "../../lib/mobileTheme";
 import { getMobileTerminalTheme, type TerminalAppearanceScheme } from "../terminal/terminalTheme";
 import { resolveVexMobileReviewDiffTheme } from "../../vex/codeTheme";
@@ -138,14 +138,14 @@ function buildReviewCommentsCacheKey(comments: ReadonlyArray<ReviewInlineComment
 
 export function createNativeReviewDiffTheme(
   scheme: TerminalAppearanceScheme,
-  themeId: MobileThemeId = DEFAULT_MOBILE_THEME_ID,
+  themeId: MobileThemeId,
+  appTheme: MobileThemeVariables,
 ): NativeReviewDiffTheme {
   if (themeId === DEFAULT_MOBILE_THEME_ID) {
     return resolveVexMobileReviewDiffTheme(scheme);
   }
 
   const terminalTheme = getMobileTerminalTheme(themeId, scheme);
-  const appTheme = getMobileThemeVariables(themeId, scheme);
   const [, terminalRed] = terminalTheme.palette;
   // Swift expects #RRGGBB/#RRGGBBAA while Android expects #RRGGBB/#AARRGGBB.
   // Flatten translucent app tokens onto the code surface so both native

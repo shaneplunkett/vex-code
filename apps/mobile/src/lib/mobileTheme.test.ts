@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
-import * as NodeFS from "node:fs";
-
 import { BUILT_IN_THEME_IDS, BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
-import { DEFAULT_MOBILE_THEME_VARIABLES } from "./mobileDefaultTheme";
 import { VEX_MOBILE_THEME_PREVIEW_COLORS, VEX_MOBILE_THEME_VARIABLES } from "../vex/theme";
+import { readDefaultMobileThemeVariables } from "./mobileTheme.test-support";
 
 import {
   createMobileThemePairPatch,
@@ -12,7 +10,6 @@ import {
   DEFAULT_MOBILE_THEME_ID,
   getMobileThemePreviewColors,
   getMobileThemeVariables,
-  MOBILE_THEME_IDS,
   normalizeMobileThemeId,
   normalizeMobileThemeMode,
   resolveMobileThemeIds,
@@ -53,13 +50,12 @@ function compositeOver(overlay: string, background: string): string {
 
 describe("mobile themes", () => {
   it("declares every runtime theme variable in the static stylesheet", () => {
-    const stylesheet = NodeFS.readFileSync(new URL("../../global.css", import.meta.url), "utf8");
-    const stylesheetVariables = new Set(
-      Array.from(stylesheet.matchAll(/--color-[a-z0-9-]+/g), ([variable]) => variable),
+    const generatedVariables = createMobileThemeVariables(BUILT_IN_THEMES[0].colors, "light");
+    expect(Object.keys(readDefaultMobileThemeVariables("light")).sort()).toEqual(
+      Object.keys(generatedVariables).sort(),
     );
-
-    expect(Array.from(stylesheetVariables).sort()).toEqual(
-      Object.keys(DEFAULT_MOBILE_THEME_VARIABLES.light).sort(),
+    expect(Object.keys(readDefaultMobileThemeVariables("dark")).sort()).toEqual(
+      Object.keys(generatedVariables).sort(),
     );
   });
 
@@ -72,12 +68,8 @@ describe("mobile themes", () => {
   });
 
   it("preserves the Vex palette as the compatible default", () => {
-    expect(getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "light")).toEqual(
-      VEX_MOBILE_THEME_VARIABLES.light,
-    );
-    expect(getMobileThemeVariables(DEFAULT_MOBILE_THEME_ID, "dark")).toEqual(
-      VEX_MOBILE_THEME_VARIABLES.dark,
-    );
+    expect(readDefaultMobileThemeVariables("light")).toEqual(VEX_MOBILE_THEME_VARIABLES.light);
+    expect(readDefaultMobileThemeVariables("dark")).toEqual(VEX_MOBILE_THEME_VARIABLES.dark);
   });
 
   it("applies palette overrides on top of the selected built-in theme", () => {
@@ -89,7 +81,7 @@ describe("mobile themes", () => {
     expect(variables["--color-screen"]).toMatch(/^#/);
   });
 
-  it("uses the same preview roles and standard artwork as desktop", () => {
+  it("uses the Vex preview for the compatible default and desktop roles for built-ins", () => {
     expect(getMobileThemePreviewColors(DEFAULT_MOBILE_THEME_ID, "light")).toEqual(
       VEX_MOBILE_THEME_PREVIEW_COLORS.light,
     );
@@ -166,17 +158,11 @@ describe("mobile themes", () => {
     expect(variables["--color-backdrop"]).toBe("rgba(0, 0, 0, 0.22)");
     expect(variables["--color-drawer-shadow"]).toBe("rgba(0, 0, 0, 0.12)");
     expect(variables["--color-user-bubble-foreground"]).toMatch(/^#/);
-    expect(Object.keys(DEFAULT_MOBILE_THEME_VARIABLES.light).sort()).toEqual(
-      Object.keys(variables).sort(),
-    );
-    expect(Object.keys(DEFAULT_MOBILE_THEME_VARIABLES.dark).sort()).toEqual(
-      Object.keys(variables).sort(),
-    );
   });
 
   it("keeps every built-in shadow and backdrop black-based in dark mode", () => {
-    for (const theme of BUILT_IN_THEMES) {
-      const variables = getMobileThemeVariables(normalizeMobileThemeId(theme.id), "dark");
+    for (const themeId of BUILT_IN_THEME_IDS) {
+      const variables = getMobileThemeVariables(themeId, "dark");
       expect(variables["--color-primary-shadow"]).toBe("#000000");
       expect(variables["--color-backdrop"]).toBe("rgba(0, 0, 0, 0.48)");
       expect(variables["--color-drawer-shadow"]).toBe("rgba(0, 0, 0, 0.32)");
@@ -184,7 +170,7 @@ describe("mobile themes", () => {
   });
 
   it("keeps placeholders and selected-row labels readable on their mobile surfaces", () => {
-    for (const themeId of MOBILE_THEME_IDS) {
+    for (const themeId of BUILT_IN_THEME_IDS) {
       for (const appearance of ["light", "dark"] as const) {
         const variables = getMobileThemeVariables(themeId, appearance);
         expect(

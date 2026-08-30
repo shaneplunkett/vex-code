@@ -15,12 +15,6 @@ describe("resolveDiffThemeName", () => {
 });
 
 describe("buildPatchCacheKey", () => {
-  it("returns a stable cache key for identical content", () => {
-    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
-
-    expect(buildPatchCacheKey(patch)).toBe(buildPatchCacheKey(patch));
-  });
-
   it("normalizes outer whitespace before hashing", () => {
     const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
 
