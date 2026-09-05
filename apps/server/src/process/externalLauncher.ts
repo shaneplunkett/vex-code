@@ -613,6 +613,10 @@ function fileExplorerRevealLaunch(
   };
 }
 
+function normalizeWindowsFileManagerPath(target: string): string {
+  return target.replaceAll("/", "\\");
+}
+
 const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevealLaunch")(function* (
   target: string,
   platform: NodeJS.Platform,
@@ -630,7 +634,11 @@ const resolveFileManagerRevealLaunch = Effect.fn("resolveFileManagerRevealLaunch
   }
 
   if (platform === "win32") {
-    return fileExplorerRevealLaunch(target, target, resolvePowerShellPath(env));
+    return fileExplorerRevealLaunch(
+      target,
+      normalizeWindowsFileManagerPath(target),
+      resolvePowerShellPath(env),
+    );
   }
 
   if (

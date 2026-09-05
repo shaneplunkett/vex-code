@@ -34,6 +34,7 @@ import {
   buildBooleanOptionDescriptor,
   buildSelectOptionDescriptor,
   buildServerProvider,
+  COMPACT_SLASH_COMMAND,
   collectStreamAsString,
   isCommandMissingCause,
   providerModelsFromSettings,
@@ -415,9 +416,7 @@ const makeCursorAcpProbeRuntime = (
             "acp",
           ],
           cwd: process.cwd(),
-          ...(environment
-            ? { environment: AcpSessionRuntime.extendAcpSpawnEnvironment(environment) }
-            : {}),
+          ...(environment ? { env: environment } : {}),
         },
         cwd: process.cwd(),
         clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
@@ -641,6 +640,7 @@ export function buildCursorProviderSnapshot(input: {
       input.cursorSettings.customModels,
       EMPTY_CAPABILITIES,
     ),
+    slashCommands: [COMPACT_SLASH_COMMAND],
     probe: {
       installed: true,
       version: input.parsed.version,

@@ -9,7 +9,6 @@ import {
   isValidGrokReasoningEffortToken,
   resolveGrokAcpBaseModelId,
 } from "./GrokAcpSupport.ts";
-import { extendAcpSpawnEnvironment, replaceAcpSpawnEnvironment } from "./AcpSessionRuntime.ts";
 
 describe("resolveGrokAcpBaseModelId", () => {
   it("normalizes empty and custom Grok model ids", () => {
@@ -50,47 +49,37 @@ describe("grokAcpSpawnArgs", () => {
 
 describe("buildGrokAcpSpawnInput", () => {
   it("passes the T3 Code referrer through Grok OAuth env", () => {
-    const spawn = buildGrokAcpSpawnInput(
-      { binaryPath: "/usr/local/bin/grok" },
-      "/tmp/project",
-      extendAcpSpawnEnvironment({
-        XAI_API_KEY: "secret",
-        GROK_OAUTH2_REFERRER: "other-client",
-      }),
-    );
+    const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
+      XAI_API_KEY: "secret",
+      GROK_OAUTH2_REFERRER: "other-client",
+    });
 
     expect(spawn).toEqual({
       command: "/usr/local/bin/grok",
       args: ["agent", "stdio"],
       cwd: "/tmp/project",
-      environment: {
-        values: {
-          XAI_API_KEY: "secret",
-          GROK_OAUTH2_REFERRER: "t3code",
-        },
-        mode: "extend",
+      env: {
+        XAI_API_KEY: "secret",
+        GROK_OAUTH2_REFERRER: "t3code",
       },
+      extendEnv: false,
     });
   });
 
   it("marks a resolved workspace environment as complete", () => {
-    const spawn = buildGrokAcpSpawnInput(
-      { binaryPath: "/usr/local/bin/grok" },
-      "/tmp/project",
-      replaceAcpSpawnEnvironment({ KEEP: "yes" }),
-    );
+    const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
+      KEEP: "yes",
+    });
 
     expect(spawn).toEqual({
       command: "/usr/local/bin/grok",
       args: ["agent", "stdio"],
       cwd: "/tmp/project",
-      environment: {
-        values: {
-          KEEP: "yes",
-          GROK_OAUTH2_REFERRER: "t3code",
-        },
-        mode: "replace",
+      env: {
+        KEEP: "yes",
+        GROK_OAUTH2_REFERRER: "t3code",
       },
+      extendEnv: false,
     });
   });
 
@@ -204,6 +193,36 @@ describe("applyGrokAcpModelSelection", () => {
       });
       expect(modelCalls).toEqual([]);
       expect(result).toBe("grok-build");
+    }),
+  );
+
+  it.effect("keeps the session's current model when the product slug is requested", () =>
+    Effect.gen(function* () {
+      const { runtime, modelCalls } = makeRecordingRuntime();
+      const result = yield* applyGrokAcpModelSelection({
+        runtime,
+        currentModelId: "grok-4.6",
+        requestedModelId: "grok-build",
+        mapError: (cause) => cause.message,
+      });
+      expect(modelCalls).toEqual([]);
+      expect(result).toBe("grok-4.6");
+    }),
+  );
+
+  it.effect("applies reasoning to the current model when the product slug is requested", () =>
+    Effect.gen(function* () {
+      const { runtime, modelCalls } = makeRecordingRuntime();
+      const result = yield* applyGrokAcpModelSelection({
+        runtime,
+        currentModelId: "grok-4.6",
+        currentReasoningEffort: "high",
+        requestedModelId: "grok-build",
+        requestedReasoningEffort: "xhigh",
+        mapError: (cause) => cause.message,
+      });
+      expect(modelCalls).toEqual([{ modelId: "grok-4.6", meta: { reasoningEffort: "xhigh" } }]);
+      expect(result).toBe("grok-4.6");
     }),
   );
 

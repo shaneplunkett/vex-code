@@ -42,6 +42,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import { buildRuntimeInstructions } from "../RuntimeInstructions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import {
   ProviderAdapterProcessError,
@@ -82,9 +83,10 @@ import {
 import { resolveCursorAcpBaseModelId } from "./CursorProvider.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
-  rejectUnsupportedSkillInvocations,
-  requireResolvedSkillInvocationInput,
-} from "../skillInvocations.ts";
+  discoverCursorSkills,
+  hasCursorSkillMention,
+  rewriteCursorSkillMentions,
+} from "../Drivers/CursorSkills.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
 const PROVIDER = ProviderDriverKind.make("cursor");
@@ -138,8 +140,10 @@ interface CursorSessionContext {
   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
   readonly turns: Array<{ id: TurnId; items: Array<unknown> }>;
+  readonly sessionEnvironment: NodeJS.ProcessEnv | undefined;
   lastPlanFingerprint: string | undefined;
   activeTurnId: TurnId | undefined;
+  cursorSkillNames: ReadonlySet<string> | undefined;
   /** Number of sendTurn prompts currently in flight or being prepared.
    * >0 means a turn is actively running, so a new sendTurn is a steer that
    * continues it, and only the last remaining prompt settles the turn. */
@@ -549,11 +553,12 @@ export function makeCursorAdapter(
             cursorSettings: effectiveCursorSettings,
             ...(sessionEnvironment
               ? {
-                  environment: AcpSessionRuntime.replaceAcpSpawnEnvironment(sessionEnvironment),
+                  environment: sessionEnvironment,
                 }
               : {}),
             childProcessSpawner,
             cwd,
+            runtimeMode: input.runtimeMode,
             ...(resumeSessionId ? { resumeSessionId } : {}),
             clientInfo: { name: "t3-code", version: "0.0.0" },
             ...(mcpSession
@@ -793,8 +798,10 @@ export function makeCursorAdapter(
             pendingApprovals,
             pendingUserInputs,
             turns: [],
+            sessionEnvironment,
             lastPlanFingerprint: undefined,
             activeTurnId: undefined,
+            cursorSkillNames: undefined,
             promptsInFlight: 0,
             stopped: false,
           };
@@ -932,13 +939,6 @@ export function makeCursorAdapter(
 
     const sendTurn: CursorAdapterShape["sendTurn"] = (input) =>
       Effect.gen(function* () {
-        yield* requireResolvedSkillInvocationInput(
-          rejectUnsupportedSkillInvocations(input, "Cursor"),
-          {
-            provider: PROVIDER,
-            method: "session/prompt",
-          },
-        );
         const ctx = yield* requireSession(input.threadId);
         // A sendTurn while a prompt is in flight is a steer: the agent folds
         // the new prompt into the ongoing work, so the active turn id is
@@ -991,8 +991,28 @@ export function makeCursorAdapter(
           }
 
           const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-          if (input.input?.trim()) {
-            promptParts.push({ type: "text", text: input.input.trim() });
+          const rawPrompt = input.input?.trim() ?? "";
+          if (rawPrompt) {
+            let cursorSkillNames = ctx.cursorSkillNames;
+            if (hasCursorSkillMention(rawPrompt) && cursorSkillNames === undefined) {
+              const skills = yield* discoverCursorSkills(
+                ctx.session.cwd,
+                ctx.sessionEnvironment,
+              ).pipe(
+                Effect.provideService(FileSystem.FileSystem, fileSystem),
+                Effect.provideService(Path.Path, path),
+              );
+              cursorSkillNames = new Set(
+                skills
+                  .filter((skill) => skill.enabled && skill.userInvocable !== false)
+                  .map((skill) => skill.name),
+              );
+              ctx.cursorSkillNames = cursorSkillNames;
+            }
+            const prompt = cursorSkillNames
+              ? rewriteCursorSkillMentions(rawPrompt, cursorSkillNames)
+              : rawPrompt;
+            promptParts.push({ type: "text", text: prompt });
           }
           if (input.attachments && input.attachments.length > 0) {
             for (const attachment of input.attachments) {
@@ -1039,9 +1059,16 @@ export function makeCursorAdapter(
             });
           }
 
+          // ACP has no system-message field; keep runtime context separate from the user's text.
           const result = yield* ctx.acp
             .prompt({
-              prompt: promptParts,
+              prompt: [
+                ...promptParts,
+                {
+                  type: "text",
+                  text: buildRuntimeInstructions({ harness: "Cursor", model: resolvedModel }),
+                },
+              ],
             })
             .pipe(
               Effect.mapError((error) =>

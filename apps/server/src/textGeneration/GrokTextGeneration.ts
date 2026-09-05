@@ -31,7 +31,6 @@ import {
   makeGrokAcpRuntime,
   resolveGrokAcpBaseModelId,
 } from "../provider/acp/GrokAcpSupport.ts";
-import { extendAcpSpawnEnvironment } from "../provider/acp/AcpSessionRuntime.ts";
 
 const GROK_TIMEOUT_MS = 180_000;
 
@@ -66,7 +65,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeGrokAcpRuntime({
         grokSettings,
-        environment: extendAcpSpawnEnvironment(environment),
+        environment,
         childProcessSpawner: commandSpawner,
         cwd,
         clientInfo: { name: "t3-code-git-text", version: "0.0.0" },
