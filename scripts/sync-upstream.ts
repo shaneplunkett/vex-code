@@ -19,7 +19,7 @@ const NIGHTLY_TAG_PATTERN = "v*-nightly.*";
 
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
-export class UpstreamSyncProcessError extends Schema.TaggedErrorClass<UpstreamSyncProcessError>()(
+export class UpstreamSyncProcessError extends Schema.TaggedError<UpstreamSyncProcessError>()(
   "UpstreamSyncProcessError",
   {
     operation: Schema.Literals(["spawn", "communicate"]),
@@ -34,7 +34,7 @@ export class UpstreamSyncProcessError extends Schema.TaggedErrorClass<UpstreamSy
   }
 }
 
-export class UpstreamSyncCommandError extends Schema.TaggedErrorClass<UpstreamSyncCommandError>()(
+export class UpstreamSyncCommandError extends Schema.TaggedError<UpstreamSyncCommandError>()(
   "UpstreamSyncCommandError",
   {
     executable: Schema.String,
@@ -60,7 +60,7 @@ const UpstreamSyncGuardReason = Schema.Literals([
 ]);
 type UpstreamSyncGuardReason = typeof UpstreamSyncGuardReason.Type;
 
-export class UpstreamSyncGuardError extends Schema.TaggedErrorClass<UpstreamSyncGuardError>()(
+export class UpstreamSyncGuardError extends Schema.TaggedError<UpstreamSyncGuardError>()(
   "UpstreamSyncGuardError",
   {
     reason: UpstreamSyncGuardReason,

@@ -1,4 +1,8 @@
-import { BUILT_IN_THEMES, getThemeColorsForAppearance } from "@t3tools/shared/themePalettes";
+import {
+  BUILT_IN_THEMES,
+  T3_CHAT_THEME,
+  getThemeColorsForAppearance,
+} from "@t3tools/shared/themePalettes";
 
 import {
   getMobileThemeVariables,
@@ -16,8 +20,28 @@ export interface TerminalTheme {
   readonly border: string;
   readonly cursorForeground: string;
   readonly cursorBackground: string;
-  readonly palette: readonly string[];
+  /** The 16 ANSI colors, in order. A fixed tuple so indexed reads are never undefined. */
+  readonly palette: TerminalPalette;
 }
+
+type TerminalPalette = readonly [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
 
 const PIERRE_LIGHT_THEME: TerminalTheme = {
   // Pierre terminal palette with the app's shared screen background.
@@ -83,10 +107,13 @@ export function getMobileTerminalTheme(
   themeId: MobileThemeId,
   scheme: TerminalAppearanceScheme,
 ): TerminalTheme {
-  if (themeId === "t3-code") return resolveVexMobileTerminalTheme(scheme);
+  // Material You shares the default palette, so it shares the Vex terminal theme too.
+  if (themeId === "t3-code" || themeId === "material-you") {
+    return resolveVexMobileTerminalTheme(scheme);
+  }
   const base = getPierreTerminalTheme(scheme);
 
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? BUILT_IN_THEMES[0];
+  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
   const palette = getThemeColorsForAppearance(theme, scheme) ?? theme.colors;
   const colors = getMobileThemeVariables(themeId, scheme);
   const background = themeColorToNativeColor(palette.terminalBackground);

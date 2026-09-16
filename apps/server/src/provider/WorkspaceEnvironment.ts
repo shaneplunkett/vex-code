@@ -23,7 +23,7 @@ const DIRENV_EXPORT_TIMEOUT = "2 minutes" as const;
 const DirenvExport = Schema.Record(Schema.String, Schema.NullOr(Schema.String));
 const decodeDirenvExport = Schema.decodeUnknownEffect(Schema.fromJsonString(DirenvExport));
 
-export class WorkspaceEnvironmentError extends Schema.TaggedErrorClass<WorkspaceEnvironmentError>()(
+export class WorkspaceEnvironmentError extends Schema.TaggedError<WorkspaceEnvironmentError>()(
   "WorkspaceEnvironmentError",
   {
     cwd: Schema.String,
@@ -36,7 +36,7 @@ export class WorkspaceEnvironmentError extends Schema.TaggedErrorClass<Workspace
   }
 }
 
-export class WorkspaceEnvironmentApprovalRequired extends Schema.TaggedErrorClass<WorkspaceEnvironmentApprovalRequired>()(
+export class WorkspaceEnvironmentApprovalRequired extends Schema.TaggedError<WorkspaceEnvironmentApprovalRequired>()(
   "WorkspaceEnvironmentApprovalRequired",
   {
     cwd: Schema.String,

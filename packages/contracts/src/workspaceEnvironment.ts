@@ -16,7 +16,7 @@ export const WorkspaceEnvironmentStatus = Schema.Union([
 ]);
 export type WorkspaceEnvironmentStatus = typeof WorkspaceEnvironmentStatus.Type;
 
-export class WorkspaceEnvironmentRequestError extends Schema.TaggedErrorClass<WorkspaceEnvironmentRequestError>()(
+export class WorkspaceEnvironmentRequestError extends Schema.TaggedError<WorkspaceEnvironmentRequestError>()(
   "WorkspaceEnvironmentRequestError",
   {
     cwd: TrimmedNonEmptyString,

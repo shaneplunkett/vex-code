@@ -39,6 +39,9 @@ describe("getMobileTerminalTheme", () => {
       background: "#1e1e2e",
       cursorForeground: "#b4befe",
     });
+    expect(getMobileTerminalTheme("material-you", "dark")).toEqual(
+      getMobileTerminalTheme("t3-code", "dark"),
+    );
   });
 
   it("applies the selected palette without replacing ANSI status colors", () => {

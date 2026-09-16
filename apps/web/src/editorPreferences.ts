@@ -36,7 +36,7 @@ export function resolveExternalPreferredEditor(
   return EDITORS.find((editor) => externalEditors.has(editor.id))?.id ?? null;
 }
 
-export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
+export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedError<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
   {
     targetPath: Schema.String,
@@ -47,7 +47,7 @@ export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorC
   }
 }
 
-export class PreferredEditorUnavailableError extends Schema.TaggedErrorClass<PreferredEditorUnavailableError>()(
+export class PreferredEditorUnavailableError extends Schema.TaggedError<PreferredEditorUnavailableError>()(
   "PreferredEditorUnavailableError",
   {
     environmentId: EnvironmentId,

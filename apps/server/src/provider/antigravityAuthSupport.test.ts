@@ -15,6 +15,7 @@ import * as Ndjson from "effect/unstable/encoding/Ndjson";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as AcpErrors from "effect-acp/errors";
+import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 
 import {
   ANTIGRAVITY_AUTH_BROWSER_MARKER,
@@ -50,6 +51,7 @@ describe("Antigravity process environment", () => {
     geminiHome: "/t3/userdata/providers/antigravity/profile",
     acpDirectory: "/t3/userdata/providers/antigravity/profile/antigravity-acp",
     tokenPath: "/t3/userdata/providers/antigravity/profile/antigravity-acp/acp_token.json",
+    tempDirectory: "/t3/userdata/providers/antigravity/profile/antigravity-acp/tmp",
     browserCommand: "managed-browser-helper",
   };
 
@@ -100,6 +102,7 @@ describe("Antigravity process environment", () => {
         BROWSER: profile.browserCommand,
         PYTHONUNBUFFERED: "1",
         ELECTRON_RUN_AS_NODE: "1",
+        TMPDIR: profile.tempDirectory,
       },
     });
   });
@@ -184,6 +187,47 @@ describe("Antigravity process environment", () => {
         gcpLocation: "us-central1",
       }),
     ).toBeNull();
+  });
+
+  it("isolates TEMP and TMP to the profile directory on Windows", () => {
+    const windowsProfile: AntigravityProfile = {
+      platform: "win32",
+      geminiHome: "C:\\state\\providers\\antigravity\\profile",
+      acpDirectory: "C:\\state\\providers\\antigravity\\profile\\antigravity-acp",
+      tokenPath: "C:\\state\\providers\\antigravity\\profile\\antigravity-acp\\acp_token.json",
+      tempDirectory: "C:\\state\\providers\\antigravity\\profile\\antigravity-acp\\tmp",
+      browserCommand: "managed-browser-helper",
+    };
+    const input = {
+      installation: {
+        executablePath: "C:\\release\\agy_acp_server.exe",
+        harnessPath: "C:\\release\\localharness_external.exe",
+      },
+      profile: windowsProfile,
+      cwd: "C:\\project",
+      baseEnv: { PATH: "C:\\Windows\\system32", TEMP: "C:\\Users\\user\\AppData\\Local\\Temp" },
+    };
+    const shared = buildAntigravityAcpSpawnInput(input);
+    expect(shared.env?.TEMP).toBe(windowsProfile.tempDirectory);
+    expect(shared.env?.TMP).toBe(windowsProfile.tempDirectory);
+    const perRun = buildAntigravityAcpSpawnInput({
+      ...input,
+      runtimeTempDirectory: `${windowsProfile.tempDirectory}\\run-1`,
+    });
+    expect(perRun.env?.TEMP).toBe(`${windowsProfile.tempDirectory}\\run-1`);
+    expect(perRun.env?.TMP).toBe(`${windowsProfile.tempDirectory}\\run-1`);
+  });
+
+  it("isolates TMPDIR to the profile directory on POSIX hosts", () => {
+    const spawn = buildAntigravityAcpSpawnInput({
+      installation: { executablePath: "/release/acp", harnessPath: "/release/harness" },
+      profile,
+      cwd: "/project",
+      baseEnv: { TMPDIR: "/tmp" },
+      runtimeTempDirectory: `${profile.tempDirectory}/run-1`,
+    });
+    expect(spawn.env?.TMPDIR).toBe(`${profile.tempDirectory}/run-1`);
+    expect(spawn.env?.TEMP).toBeUndefined();
   });
 
   it("uses the registry launch arguments for each supported host platform", () => {
@@ -508,6 +552,42 @@ it.layer(NodeServices.layer)("Antigravity profile preparation", (it) => {
       yield* prepareAntigravityProfile({ profileDirectory: profile.geminiHome });
       expect(yield* fs.readFileString(profile.tokenPath)).toBe("synthetic-token-fixture");
     }),
+  );
+
+  it.effect.skipIf(!symlinksSupported)(
+    "links the user's global skill directories into the profile without touching real content",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const temporaryDirectory = yield* fs.makeTempDirectoryScoped();
+        const userHome = path.join(temporaryDirectory, "home");
+        const profileDirectory = path.join(temporaryDirectory, "profile");
+        const configSkills = path.join(userHome, ".gemini", "config", "skills");
+        const cliSkills = path.join(userHome, ".gemini", "antigravity-cli", "skills");
+        yield* fs.makeDirectory(path.join(configSkills, "review"), { recursive: true });
+
+        yield* prepareAntigravityProfile({ profileDirectory, userHome });
+        const configLink = path.join(profileDirectory, "config", "skills");
+        const cliLink = path.join(profileDirectory, "antigravity-cli", "skills");
+        expect(yield* fs.readLink(configLink)).toBe(configSkills);
+        expect(yield* fs.readLink(cliLink)).toBe(cliSkills);
+        expect(yield* fs.exists(path.join(configLink, "review"))).toBe(true);
+        // Only the skill directories are shared; the rest of the profile stays private.
+        expect(yield* fs.exists(path.join(profileDirectory, "config", "mcp_config.json"))).toBe(
+          false,
+        );
+
+        // A stale link is repointed; a real directory the user placed there is kept.
+        yield* fs.remove(cliLink);
+        yield* fs.symlink(path.join(temporaryDirectory, "elsewhere"), cliLink);
+        yield* fs.remove(configLink);
+        yield* fs.makeDirectory(path.join(configLink, "own-skill"), { recursive: true });
+        yield* prepareAntigravityProfile({ profileDirectory, userHome });
+        expect(yield* fs.readLink(cliLink)).toBe(cliSkills);
+        expect(yield* fs.exists(path.join(configLink, "own-skill"))).toBe(true);
+        expect((yield* fs.stat(configLink)).type).toBe("Directory");
+      }),
   );
 
   it.effect("rewrites the GCP block on every launch and never stores the API key", () =>
