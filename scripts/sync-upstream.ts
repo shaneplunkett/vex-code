@@ -52,6 +52,7 @@ export class UpstreamSyncCommandError extends Schema.TaggedError<UpstreamSyncCom
 
 const UpstreamSyncGuardReason = Schema.Literals([
   "dirty-worktree",
+  "dropped-vex-seam",
   "missing-nightly-tag",
   "remote-history-diverged",
   "target-not-in-upstream",
@@ -71,6 +72,8 @@ export class UpstreamSyncGuardError extends Schema.TaggedError<UpstreamSyncGuard
     switch (this.reason) {
       case "dirty-worktree":
         return "The worktree must be clean before syncing upstream.";
+      case "dropped-vex-seam":
+        return `The merge left these Vex modules with no importer outside their own directory: ${this.detail ?? "unknown"}. Reattach each one through its narrowest seam before completing the sync.`;
       case "missing-nightly-tag":
         return "No published upstream nightly tag was found.";
       case "remote-history-diverged":
@@ -221,6 +224,39 @@ export function selectLatestNightlyTag(rawTags: string): string | undefined {
     .find((tag) => tag.length > 0);
 }
 
+/**
+ * Import specifiers that would wire this Vex module into the rest of the app. TypeScript modules are
+ * imported with or without their extension, other assets always carry theirs. The trailing quote keeps
+ * `vex/theme` from matching an import of `vex/theme.css`.
+ */
+function vexImportSpecifiers(modulePath: string): ReadonlyArray<string> {
+  const basename = modulePath.slice(modulePath.lastIndexOf("/") + 1);
+  const scriptExtension = /\.tsx?$/.exec(basename);
+  const candidates =
+    scriptExtension === null ? [basename] : [basename, basename.slice(0, scriptExtension.index)];
+  return candidates.flatMap((candidate) => [`vex/${candidate}"`, `vex/${candidate}'`]);
+}
+
+/**
+ * Names Vex layer modules that nothing outside their own directory imports any more.
+ *
+ * Resolving a sync conflict toward upstream deletes the one-line import that wires a Vex module in, but
+ * leaves the module itself on disk. The fork still typechecks and its tests still pass, so the only
+ * symptom is upstream's behaviour quietly rendering in place of ours.
+ */
+export function findDroppedVexSeams(
+  vexModulePaths: ReadonlyArray<string>,
+  externalImportSources: string,
+): ReadonlyArray<string> {
+  return vexModulePaths.filter(
+    (modulePath) =>
+      !/\.test\.[cm]?tsx?$/.test(modulePath) &&
+      !vexImportSpecifiers(modulePath).some((specifier) =>
+        externalImportSources.includes(specifier),
+      ),
+  );
+}
+
 export function requiresMobileLint(paths: ReadonlyArray<string>): boolean {
   return paths.some(
     (path) =>
@@ -232,6 +268,42 @@ export function requiresMobileLint(paths: ReadonlyArray<string>): boolean {
         path.endsWith(".kts")),
   );
 }
+
+const ensureVexSeamsIntact = Effect.fn("ensureVexSeamsIntact")(function* (rootDir: string) {
+  const vexModulePaths = (yield* runGit(rootDir, ["ls-files", "apps/*/src/vex/*"])).stdout
+    .split("\n")
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0);
+  if (vexModulePaths.length === 0) {
+    return;
+  }
+
+  // git grep exits 1 when nothing matches, which is a real answer here rather than a failure.
+  const externalImportSources = (yield* runGit(
+    rootDir,
+    [
+      "grep",
+      "-h",
+      "-E",
+      "vex/[A-Za-z0-9._-]+[\"']",
+      "--",
+      "apps",
+      "packages",
+      ":!*/vex/*",
+      ":!*.md",
+    ],
+    { allowedExitCodes: [0, 1] },
+  )).stdout;
+
+  const droppedSeams = findDroppedVexSeams(vexModulePaths, externalImportSources);
+  if (droppedSeams.length > 0) {
+    return yield* new UpstreamSyncGuardError({
+      reason: "dropped-vex-seam",
+      detail: droppedSeams.join(", "),
+    });
+  }
+  yield* Console.log(`Verified ${vexModulePaths.length} Vex layer modules are still wired in.`);
+});
 
 const ensureTargetTag = Effect.fn("ensureTargetTag")(function* (
   rootDir: string,
@@ -355,6 +427,7 @@ export const syncUpstream = Effect.fn("syncUpstream")(function* (
 
   return yield* Effect.gen(function* () {
     yield* runVisibleCommand(rootDir, "git", ["merge", "--no-ff", "--no-commit", targetRef]);
+    yield* ensureVexSeamsIntact(rootDir);
 
     let ranMobileLint = false;
     if (!(options.skipChecks ?? false)) {
