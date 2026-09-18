@@ -47,6 +47,20 @@ releases into it; do not maintain a separate upstream mirror branch.
   `ours` or `theirs` side.
 - After manually resolving an interrupted sync, rerun the task completion checks before completing the
   merge commit.
+- After every sync, confirm each Vex layer module is still imported from outside its own directory.
+  Taking `theirs` on a conflict silently deletes a one-line Vex import while leaving the Vex module in
+  place, so the fork still typechecks and passes its tests while rendering upstream's behaviour. This
+  has already dropped the sidebar wordmark and the sidebar palette. This sweep prints nothing on a
+  healthy tree and names any Vex module that has lost its last importer:
+
+  ```bash
+  for f in $(git ls-files 'apps/*/src/vex/*' | grep -v '\.test\.'); do
+    base=$(basename "$f"); stem="${base%.*}"
+    git grep -q -E "vex/(${stem}|${base})[\"']" -- apps ':!*/vex/*' || echo "dropped seam: $f"
+  done
+  ```
+
+  Reattach anything it reports rather than assuming the module was retired.
 
 ## Vex Change Architecture
 
