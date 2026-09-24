@@ -1,10 +1,5 @@
 import {
-  BUILT_IN_THEMES,
-  T3_CHAT_THEME,
-  getThemeColorsForAppearance,
-} from "@t3tools/shared/themePalettes";
-
-import {
+  getMobileThemeColors,
   getMobileThemeVariables,
   themeColorToNativeColor,
   type MobileThemeId,
@@ -45,12 +40,12 @@ type TerminalPalette = readonly [
 
 const PIERRE_LIGHT_THEME: TerminalTheme = {
   // Pierre terminal palette with the app's shared screen background.
-  background: "#f2f2f7",
+  background: "#fcfcfc",
   foreground: "#6C6C71",
   mutedForeground: "#8E8E95",
   border: "#eeeeef",
   cursorForeground: "#009fff",
-  cursorBackground: "#f2f2f7",
+  cursorBackground: "#fcfcfc",
   palette: [
     "#1F1F21",
     "#ff2e3f",
@@ -113,8 +108,7 @@ export function getMobileTerminalTheme(
   }
   const base = getPierreTerminalTheme(scheme);
 
-  const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
-  const palette = getThemeColorsForAppearance(theme, scheme) ?? theme.colors;
+  const palette = getMobileThemeColors(themeId, scheme);
   const colors = getMobileThemeVariables(themeId, scheme);
   const background = themeColorToNativeColor(palette.terminalBackground);
   return {

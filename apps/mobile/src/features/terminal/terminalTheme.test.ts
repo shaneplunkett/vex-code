@@ -12,10 +12,10 @@ import {
 describe("getPierreTerminalTheme", () => {
   it("returns the upstream light terminal palette", () => {
     expect(getPierreTerminalTheme("light")).toMatchObject({
-      background: "#f2f2f7",
+      background: "#fcfcfc",
       foreground: "#6C6C71",
       cursorForeground: "#009fff",
-      cursorBackground: "#f2f2f7",
+      cursorBackground: "#fcfcfc",
     });
   });
 

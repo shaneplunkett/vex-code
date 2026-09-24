@@ -468,11 +468,11 @@ export const syncUpstream = Effect.fn("syncUpstream")(function* (
 export const syncUpstreamCommand = Command.make(
   "sync-upstream",
   {
-    tag: Flag.string("tag").pipe(
+    tag: Flag.String("tag").pipe(
       Flag.withDescription("Sync a specific fetched upstream tag instead of the latest nightly."),
       Flag.optional,
     ),
-    dryRun: Flag.boolean("dry-run").pipe(
+    dryRun: Flag.Boolean("dry-run").pipe(
       Flag.withDescription("Fetch and report the selected release without starting a merge."),
       Flag.withDefault(false),
     ),

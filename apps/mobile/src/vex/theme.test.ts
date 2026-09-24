@@ -17,7 +17,7 @@ describe("Vex mobile colour theme", () => {
         Object.keys(readDefaultMobileThemeVariables(scheme)).sort(),
       );
       expect(readDefaultMobileThemeVariables(scheme)).toEqual(VEX_MOBILE_THEME_VARIABLES[scheme]);
-      expect(getMobileThemeRuntimeVariables("t3-code", scheme)).toEqual(
+      expect(getMobileThemeRuntimeVariables("t3-code", scheme, "web")).toEqual(
         VEX_MOBILE_THEME_VARIABLES[scheme],
       );
     }
