@@ -54,6 +54,9 @@ releases into it; do not maintain a separate upstream mirror branch.
   wordmark and the sidebar palette. When the guard fires, the merge is left uncommitted: reattach each
   named module through its narrowest seam, then complete the merge. Do not delete the module or bypass
   the guard unless Shane has actually retired that customisation.
+- Retired customisations stay retired. The fork's provider-agnostic skill invocation patch
+  (`cb5a90ee3`, August 2026) was dropped in the `v0.0.39` sync in favour of upstream's own skill
+  handling. Its commits remain in history, but it is not a live Vex feature; do not restore it.
 
 ## Vex Change Architecture
 
