@@ -10,7 +10,7 @@ export function VexSidebarWordmark({ onBackdrop = false }: { onBackdrop?: boolea
       <img
         alt=""
         aria-hidden="true"
-        className="size-4 shrink-0 rounded-[4px]"
+        className="size-4 shrink-0 rounded-sm"
         src={VEX_APP_ICON_PATH}
       />
       <span className={cn("truncate font-semibold", onBackdrop ? "text-white" : "text-foreground")}>
