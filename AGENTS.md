@@ -22,7 +22,9 @@ upstream-owned and maintain server compatibility with it.
 - `origin` is `shaneplunkett/vex-code`, the only normal push target.
 - `upstream` is fetch-only with push URL `DISABLED`. Upstream writes require Shane's
   explicit request for that exact action.
-- Keep GitHub Actions disabled. Restoring upstream source must not enable workflows.
+- Keep GitHub Actions disabled repository-wide in GitHub settings. Preserve upstream
+  workflow files and helpers unchanged; do not delete them to prevent runs. Enabling
+  Actions or individual workflows requires Shane's explicit request.
 - Keep `main` history stable. Merge published nightly tags with `pnpm sync:upstream`;
   inspect with `--dry-run` first. Preserve real merge ancestry and all sync guards.
 - The sync command stays local-first: no pushing, PR creation, or Nix updates.
