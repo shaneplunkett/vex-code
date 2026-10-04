@@ -17,10 +17,11 @@ GitHub Actions is disabled for this fork, so required checks run locally.
 
 This is Shane's personal fork of `pingdotgg/t3code`. Application code follows upstream;
 personal appearance and packaging changes live in `/home/shane/nix-config`.
-The previous branding, theme, Neovim launcher, terminal shell selector, provider skill
-patches, and direnv implementation are retired. Rebuild direnv as separate work against
-the current upstream runtime. Use the stock upstream mobile app; keep mobile source
-upstream-owned and maintain server compatibility with it.
+The previous branding, theme, Neovim launcher, terminal shell selector and provider skill
+patches are retired. direnv support lives in `apps/{server,web}/src/vex/workspaceEnvironment*`;
+`apps/server/src/vex/workspaceEnvironmentSeams.test.ts` names every upstream seam it needs,
+so reattach any seam it reports after a sync. Use the stock upstream mobile app; keep
+mobile source upstream-owned and maintain server compatibility with it.
 
 - `origin` is `shaneplunkett/vex-code`, the only normal push target.
 - `upstream` is fetch-only with push URL `DISABLED`. Upstream writes require Shane's

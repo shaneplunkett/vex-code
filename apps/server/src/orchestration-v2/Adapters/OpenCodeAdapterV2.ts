@@ -79,6 +79,7 @@ import {
 } from "../ProviderAdapterDriver.ts";
 import { makeSubagentChildThread, subagentThreadTitle } from "../SubagentProjection.ts";
 import { openCodeToolTurnItem } from "./OpenCodeToolItems.ts";
+import { withWorkspaceEnvironment } from "../../vex/workspaceEnvironment.ts";
 
 export { openCodeToolProjectionKind } from "./OpenCodeToolItems.ts";
 
@@ -958,7 +959,7 @@ export function makeOpenCodeAdapterV2(
           binaryPath: options.settings.binaryPath,
           directory: cwd,
           serverUrl: options.settings.serverUrl,
-          environment: options.environment,
+          environment: withWorkspaceEnvironment(options.environment, input.runtimePolicy),
         });
         const client = runtime.createOpenCodeSdkClient({
           baseUrl: connection.url,

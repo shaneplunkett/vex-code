@@ -50,6 +50,8 @@ import { layer as threadLaunchServiceLayer } from "./ThreadLaunchService.ts";
 import { layer as threadLifecycleServiceLayer } from "./ThreadLifecycleService.ts";
 import { layer as threadForkServiceLayer } from "./ThreadForkService.ts";
 import { layer as turnItemPositionStoreLayer } from "./TurnItemPositionStore.ts";
+import * as WorkspaceEnvironment from "../vex/workspaceEnvironment.ts";
+import * as WorkspaceEnvironmentTurns from "../vex/workspaceEnvironmentTurns.ts";
 import { layer as scheduledTaskServiceLayer } from "../scheduledTasks/ScheduledTaskService.ts";
 
 /** The shared application event log and its command receipts. */
@@ -157,6 +159,17 @@ const providerTurnStartServiceProvided = providerTurnStartServiceLayer.pipe(
       providerAuthServiceProvided,
       runExecutionServiceProvided,
       runtimePolicyProvided,
+      WorkspaceEnvironmentTurns.layer.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            providerSessionManagerProvided,
+            providerAdapterRegistryProvided,
+            eventSinkProvided,
+            idAllocatorLayer,
+            WorkspaceEnvironment.layer,
+          ),
+        ),
+      ),
     ),
   ),
 );

@@ -41,6 +41,7 @@ import {
 } from "./ProjectFaviconPickerDialog";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
+import { WorkspaceEnvironmentSettings } from "../../vex/workspaceEnvironment";
 import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 
@@ -490,6 +491,7 @@ function ProjectDetail({
           />
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
+        <WorkspaceEnvironmentSettings />
         <ProjectActionsSettings />
         {hasMultipleCheckouts ? checkoutChoices : null}
         <SettingsSection title="Danger">

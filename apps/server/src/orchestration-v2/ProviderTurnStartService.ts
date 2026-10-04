@@ -47,6 +47,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as WorkspaceEnvironmentTurns from "../vex/workspaceEnvironmentTurns.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -109,6 +110,7 @@ export const layer: Layer.Layer<
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
+    const workspaceEnvironmentTurns = yield* WorkspaceEnvironmentTurns.WorkspaceEnvironmentTurns;
 
     // These callbacks outlive startup while a run drains background work. Build
     // them outside start's scope so they cannot retain its full thread history.
@@ -515,10 +517,20 @@ export const layer: Layer.Layer<
       });
       const { isCurrentAttemptInStatus } = runControls;
 
-      const resolvedRuntimePolicy = yield* runtimePolicy.resolve({
-        thread: projection.thread,
-        modelSelection: run.modelSelection,
-      });
+      const resolvedRuntimePolicy = yield* runtimePolicy
+        .resolve({ thread: projection.thread, modelSelection: run.modelSelection })
+        .pipe(
+          Effect.flatMap((policy) =>
+            workspaceEnvironmentTurns.prepare({
+              policy,
+              run,
+              attemptId: attempt.id,
+              rootNodeId: rootNode.id,
+              providerThreadId: providerThread.id,
+              providerSessionId,
+            }),
+          ),
+        );
       const existingSessionProjection = projection.providerSessions.find(
         (candidate) => candidate.id === providerSessionId,
       );

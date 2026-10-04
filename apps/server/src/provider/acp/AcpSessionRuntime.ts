@@ -48,6 +48,10 @@ import {
   type AcpSessionModeState,
   type AcpToolCallState,
 } from "./AcpRuntimeModel.ts";
+import {
+  withWorkspaceEnvironmentSpawn,
+  type WorkspaceEnvironmentDiff,
+} from "../../vex/workspaceEnvironment.ts";
 
 const MAX_SHOWN_TOOL_CALL_IDS = 256;
 
@@ -91,6 +95,8 @@ export interface AcpSpawnInput {
 
 export interface AcpSessionRuntimeOptions {
   readonly spawn: AcpSpawnInput;
+  /** The thread directory's `.envrc` diff, applied to `spawn`. */
+  readonly workspaceEnvironment?: WorkspaceEnvironmentDiff | undefined;
   readonly cwd: string;
   readonly resumeSessionId?: string;
   readonly resumeMethod?: "load" | "resume";
@@ -2810,7 +2816,14 @@ export const layer = (
   AcpSessionRuntime,
   EffectAcpErrors.AcpError,
   ChildProcessSpawner.ChildProcessSpawner | Crypto.Crypto
-> => Layer.effect(AcpSessionRuntime, make(options));
+> =>
+  Layer.effect(
+    AcpSessionRuntime,
+    make({
+      ...options,
+      spawn: withWorkspaceEnvironmentSpawn(options.spawn, options.workspaceEnvironment),
+    }),
+  );
 
 function sessionConfigOptionsFromSetup(
   response:

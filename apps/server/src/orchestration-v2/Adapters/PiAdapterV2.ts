@@ -93,6 +93,7 @@ import {
   resolvePiLaunchArgs,
 } from "./piT3McpInjection.ts";
 import { PI_FILE_CHANGE_TOOLS } from "./piT3McpExtensionSource.ts";
+import { withWorkspaceEnvironment } from "../../vex/workspaceEnvironment.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
 const PI_DRIVER_KIND = PI_PROVIDER;
@@ -414,7 +415,7 @@ export function makePiAdapterV2(
       }
       const launch = buildPiRpcLaunch({
         launchArgs: resolvedLaunchArgs.args,
-        environment: options.environment,
+        environment: withWorkspaceEnvironment(options.environment, input.runtimePolicy),
         mcpSession,
         extensionPath,
         runtimeMode: input.runtimePolicy.runtimeMode,

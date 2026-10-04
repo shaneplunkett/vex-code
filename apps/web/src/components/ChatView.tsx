@@ -379,6 +379,7 @@ import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnect
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useEnvironmentQuery } from "../state/query";
+import { useWorkspaceEnvironmentBannerItem } from "../vex/workspaceEnvironment";
 import {
   environmentServerConfigsAtom,
   primaryServerAvailableEditorsAtom,
@@ -2426,6 +2427,11 @@ export default function ChatView(props: ChatViewProps) {
         : activeProjectClone.phase === "done"
           ? null
           : "Repository not cloned";
+  const workspaceEnvironmentBannerItem = useWorkspaceEnvironmentBannerItem({
+    environmentId: activeThread?.environmentId ?? null,
+    cwd: activeThread?.worktreePath ?? activeProject?.workspaceRoot ?? null,
+    refreshKey: `${activeLatestRun?.runId ?? ""}:${activeLatestRun?.status ?? ""}`,
+  });
   const projectCloneBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (!activeProjectClone || !activeProjectRef || activeProjectClone.phase === "done") {
       return null;
@@ -7172,12 +7178,15 @@ export default function ChatView(props: ChatViewProps) {
     // The user asked for this one, so it leads the notice tier instead of trailing it.
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const workspaceEnvironmentItems =
+      workspaceEnvironmentBannerItem === null ? [] : [workspaceEnvironmentBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...feedbackBannerItems,
         ...limitRecoveryItems,
         ...usageLimitsItems,
         ...projectCloneItems,
+        ...workspaceEnvironmentItems,
         ...systemComposerBannerItems,
         ...backgroundWorkItems,
         ...resumeCompactionItems,
@@ -7190,6 +7199,7 @@ export default function ChatView(props: ChatViewProps) {
       ...limitRecoveryItems,
       ...usageLimitsItems,
       ...projectCloneItems,
+      ...workspaceEnvironmentItems,
       ...systemComposerBannerItems,
       ...backgroundWorkItems,
       ...resumeCompactionItems,
@@ -7246,6 +7256,7 @@ export default function ChatView(props: ChatViewProps) {
     localCheckoutBranchMismatch,
     parkedThreadBannerItem,
     projectCloneBannerItem,
+    workspaceEnvironmentBannerItem,
     resumeCompactionBannerItem,
     showBranchMismatchBanner,
     systemComposerBannerItems,

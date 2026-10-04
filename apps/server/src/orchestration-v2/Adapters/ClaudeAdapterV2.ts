@@ -134,6 +134,7 @@ import {
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
+import { withWorkspaceEnvironment } from "../../vex/workspaceEnvironment.ts";
 
 export const CLAUDE_PROVIDER = ProviderDriverKind.make("claudeAgent");
 export const CLAUDE_AGENT_SDK_QUERY_PROTOCOL = "claude-agent-sdk.query" as const;
@@ -6942,7 +6943,10 @@ export function makeClaudeAdapterV2(
             cwd: turnInput.runtimePolicy.cwd,
             attachmentsDir,
             settings: adapterOptions.settings,
-            environment: adapterOptions.environment,
+            environment: withWorkspaceEnvironment(
+              adapterOptions.environment,
+              turnInput.runtimePolicy,
+            ),
             tools: queryPolicy.tools ?? CLAUDE_CODE_PRESET_TOOLS,
             ...mcpOverrides,
             permissionMode: queryPolicy.permissionMode,

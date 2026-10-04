@@ -138,6 +138,8 @@ export interface AcpAdapterV2RuntimeInput {
   readonly acpMcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
   /** Scoped credentials for terminal fallback when an ACP agent drops `mcpServers`. */
   readonly processEnvironment?: NodeJS.ProcessEnv;
+  /** Flavors spread this into `AcpSessionRuntime.layer`, which applies it to the spawn. */
+  readonly workspaceEnvironment?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["environment"];
   readonly resumeSessionId?: string;
   readonly interruptPromptOnCancel?: boolean;
   readonly clientCapabilities: EffectAcpSchema.InitializeRequest["clientCapabilities"];
@@ -2015,6 +2017,7 @@ export function makeAcpAdapterV2(
           return {
             cwd: input.runtimePolicy.cwd ?? process.cwd(),
             runtimePolicy: input.runtimePolicy,
+            workspaceEnvironment: input.runtimePolicy.environment,
             mcpServers: mcpContext.servers,
             acpMcpServers: mcpContext.acpServers,
             ...(mcpContext.processEnvironment === undefined

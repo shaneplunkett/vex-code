@@ -215,6 +215,11 @@ import {
   ProjectWriteFileResult,
 } from "./project.ts";
 import {
+  WorkspaceEnvironmentInput,
+  WorkspaceEnvironmentRequestError,
+  WorkspaceEnvironmentStatus,
+} from "./workspaceEnvironment.ts";
+import {
   TerminalAttachInput,
   TerminalAttachStreamEvent,
   TerminalClearInput,
@@ -348,6 +353,11 @@ export const WS_METHODS = {
   projectsMutate: "projects.mutate",
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
+
+  // Workspace environment (direnv) methods
+  workspaceEnvironmentStatus: "workspaceEnvironment.status",
+  workspaceEnvironmentAllow: "workspaceEnvironment.allow",
+  workspaceEnvironmentRevoke: "workspaceEnvironment.revoke",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -1151,6 +1161,24 @@ const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+const WsWorkspaceEnvironmentStatusRpc = Rpc.make(WS_METHODS.workspaceEnvironmentStatus, {
+  payload: WorkspaceEnvironmentInput,
+  success: WorkspaceEnvironmentStatus,
+  error: Schema.Union([WorkspaceEnvironmentRequestError, EnvironmentAuthorizationError]),
+});
+
+const WsWorkspaceEnvironmentAllowRpc = Rpc.make(WS_METHODS.workspaceEnvironmentAllow, {
+  payload: WorkspaceEnvironmentInput,
+  success: WorkspaceEnvironmentStatus,
+  error: Schema.Union([WorkspaceEnvironmentRequestError, EnvironmentAuthorizationError]),
+});
+
+const WsWorkspaceEnvironmentRevokeRpc = Rpc.make(WS_METHODS.workspaceEnvironmentRevoke, {
+  payload: WorkspaceEnvironmentInput,
+  success: WorkspaceEnvironmentStatus,
+  error: Schema.Union([WorkspaceEnvironmentRequestError, EnvironmentAuthorizationError]),
+});
+
 const WsProjectsMutateRpc = Rpc.make(WS_METHODS.projectsMutate, {
   payload: ProjectMutation,
   success: Project,
@@ -1785,6 +1813,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateNewRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
+  WsWorkspaceEnvironmentStatusRpc,
+  WsWorkspaceEnvironmentAllowRpc,
+  WsWorkspaceEnvironmentRevokeRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsAgentSessionsScanRpc,

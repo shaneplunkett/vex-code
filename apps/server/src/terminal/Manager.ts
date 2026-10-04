@@ -77,6 +77,7 @@ import * as ProcessRunner from "../processRunner.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
 import * as NativeTelemetryClient from "../resourceTelemetry/NativeTelemetryClient.ts";
 import * as PtyAdapter from "./PtyAdapter.ts";
+import * as WorkspaceEnvironment from "../vex/workspaceEnvironment.ts";
 
 export {
   TerminalCwdError,
@@ -1382,6 +1383,10 @@ interface TerminalManagerOptions {
     Record<string, string>,
     TerminalProviderInstanceNotFoundError | TerminalProviderEnvironmentError
   >;
+  /** The `.envrc` diff for a terminal's directory. */
+  resolveWorkspaceEnvironment?: (
+    cwd: string,
+  ) => Effect.Effect<WorkspaceEnvironment.WorkspaceEnvironmentDiff>;
 }
 
 export const resolveProviderInstanceTerminalEnvironment = Effect.fn(
@@ -1432,6 +1437,7 @@ export const make = Effect.fn("TerminalManager.make")(function* () {
   const portDiscovery = yield* PortScanner.PortDiscovery;
   const nativeTelemetry = yield* NativeTelemetryClient.NativeTelemetryClient;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const workspaceEnvironment = yield* WorkspaceEnvironment.WorkspaceEnvironment;
   const path = yield* Path.Path;
   const resolveProviderInstanceEnvironment = Effect.fn(
     "terminal.resolveProviderInstanceEnvironment",
@@ -1456,6 +1462,8 @@ export const make = Effect.fn("TerminalManager.make")(function* () {
     registerTerminalProcesses: portDiscovery.registerTerminalProcesses,
     unregisterTerminal: portDiscovery.unregisterTerminal,
     resolveProviderInstanceEnvironment,
+    resolveWorkspaceEnvironment: (cwd) =>
+      workspaceEnvironment.resolve(cwd).pipe(Effect.map((resolution) => resolution.environment)),
   });
 });
 
@@ -2256,7 +2264,15 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         Effect.andThen(
           Effect.gen(function* () {
             const shellCandidates = resolveShellCandidates(shellResolver, platform, baseEnv);
-            const terminalEnv = createTerminalSpawnEnv(baseEnv, session.runtimeEnv, platform);
+            const workspaceDiff =
+              options.resolveWorkspaceEnvironment === undefined
+                ? undefined
+                : yield* options.resolveWorkspaceEnvironment(session.cwd);
+            const terminalEnv = createTerminalSpawnEnv(
+              WorkspaceEnvironment.applyWorkspaceEnvironment(baseEnv, workspaceDiff),
+              session.runtimeEnv,
+              platform,
+            );
             // Append (never prepend) managed ACP agent install directories so
             // `kimi login` and friends resolve by name without shadowing any
             // system or user tool of the same name.
@@ -3183,4 +3199,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   });
 });
 
-export const layer = Layer.effect(TerminalManager, make()).pipe(Layer.provide(ProcessRunner.layer));
+export const layer = Layer.effect(TerminalManager, make()).pipe(
+  Layer.provide(ProcessRunner.layer),
+  Layer.provide(WorkspaceEnvironment.layer),
+);

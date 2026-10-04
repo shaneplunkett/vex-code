@@ -51,6 +51,8 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),
   reasoningEffort: Schema.optional(Schema.String),
+  /** The thread directory's `.envrc` diff; `null` unsets. See vex/workspaceEnvironment.ts. */
+  environment: Schema.optional(Schema.Record(Schema.String, Schema.NullOr(Schema.String))),
 });
 export type ProviderAdapterV2RuntimePolicy = typeof ProviderAdapterV2RuntimePolicy.Type;
 

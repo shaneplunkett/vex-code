@@ -156,6 +156,7 @@ import {
   makeSubagentConversationArtifacts,
   subagentThreadTitle,
 } from "../SubagentProjection.ts";
+import { codexWorkspaceEnvironmentConfig } from "../../vex/workspaceEnvironment.ts";
 
 const CODEX_PROVIDER = ProviderDriverKind.make("codex");
 export const CODEX_DRIVER_KIND = CODEX_PROVIDER;
@@ -1212,6 +1213,7 @@ export function codexThreadRuntimeParams(input: {
     ...(input.modelSelection === undefined ? {} : { model: input.modelSelection.model }),
     config: {
       ...CODEX_THREAD_CONFIG,
+      ...codexWorkspaceEnvironmentConfig(input.runtimePolicy),
       ...(mcpSession === undefined
         ? {}
         : {

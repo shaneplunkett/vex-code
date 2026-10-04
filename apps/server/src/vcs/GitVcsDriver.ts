@@ -39,6 +39,7 @@ import {
 } from "./GitVcsDriverCore.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
+import * as WorkspaceEnvironment from "../vex/workspaceEnvironment.ts";
 
 export interface ExecuteGitInput {
   readonly operation: string;
@@ -1254,4 +1255,7 @@ export const make = Effect.gen(function* () {
 });
 
 export const vcsLayer = Layer.effect(VcsDriver.VcsDriver, makeVcsDriver);
-export const layer = Layer.effect(GitVcsDriver, make);
+export const layer = Layer.effect(
+  GitVcsDriver,
+  make.pipe(Effect.flatMap(WorkspaceEnvironment.withWorktreeEnvrc)),
+).pipe(Layer.provide(WorkspaceEnvironment.layer));
