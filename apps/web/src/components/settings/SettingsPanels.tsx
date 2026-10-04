@@ -12,7 +12,6 @@ import {
   type ProviderInstanceId,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
-  type TerminalShell,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -198,26 +197,6 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
-
-const POSIX_TERMINAL_SHELL_OPTIONS: ReadonlyArray<{
-  value: TerminalShell;
-  label: string;
-}> = [
-  { value: "system", label: "System default" },
-  { value: "bash", label: "Bash" },
-  { value: "fish", label: "Fish" },
-  { value: "zsh", label: "Zsh" },
-];
-
-const WINDOWS_TERMINAL_SHELL_OPTIONS: ReadonlyArray<{
-  value: TerminalShell;
-  label: string;
-}> = [
-  { value: "system", label: "System default" },
-  { value: "pwsh", label: "PowerShell" },
-  { value: "powershell", label: "Windows PowerShell" },
-  { value: "cmd", label: "Command Prompt" },
-];
 
 const CHAT_WIDTH_LABELS: Record<ChatWidth, string> = {
   comfortable: "Comfortable",
@@ -616,9 +595,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
         ? ["Follow-up behavior"]
         : []),
-      ...(settings.terminalShell !== DEFAULT_UNIFIED_SETTINGS.terminalShell
-        ? ["Default shell"]
-        : []),
       ...(settings.contextWindowMeterEnabled !== DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled
         ? ["Context window indicator"]
         : []),
@@ -708,7 +684,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarAutoSettleAfterDays,
       settings.sidebarAutoSettleOnMerge,
       settings.sidebarProjectGroupingMode,
-      settings.terminalShell,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
       settings.timestampFormat,
@@ -811,7 +786,6 @@ export function useSettingsRestore(onRestored?: () => void) {
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
       continueThreadsAfterServerUpdate: DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate,
-      terminalShell: DEFAULT_UNIFIED_SETTINGS.terminalShell,
       backgroundActivity: DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
       backgroundActivityProfile: DEFAULT_UNIFIED_SETTINGS.backgroundActivityProfile,
       automaticGitFetchInterval: DEFAULT_UNIFIED_SETTINGS.automaticGitFetchInterval,
@@ -2255,15 +2229,6 @@ export function GeneralSettingsPanel() {
     DEFAULT_UNIFIED_SETTINGS.backgroundActivity,
   );
 
-  const mixedTerminalShell = useScopedSettingsMixed(["terminalShell"]);
-  const terminalShellOptions =
-    environment?.serverConfig?.environment.platform.os === "windows"
-      ? WINDOWS_TERMINAL_SHELL_OPTIONS
-      : POSIX_TERMINAL_SHELL_OPTIONS;
-  const terminalShellLabel =
-    terminalShellOptions.find((option) => option.value === settings.terminalShell)?.label ??
-    settings.terminalShell;
-
   return (
     <SettingsPageContainer>
       <ProjectDefaultsSettings category="general" />
@@ -2440,50 +2405,6 @@ export function GeneralSettingsPanel() {
             </Select>
           }
         />
-        <SettingsRow
-          serverScoped
-          settingKeys={["terminalShell"]}
-          {...searchableSetting("default-shell")}
-          description={
-            mixedTerminalShell
-              ? "The selected targets use different shells."
-              : "Used by new and restarted terminals. Falls back to the system shell if unavailable."
-          }
-          resetAction={
-            settings.terminalShell !== DEFAULT_UNIFIED_SETTINGS.terminalShell ? (
-              <SettingResetButton
-                label="default shell"
-                onClick={() =>
-                  updateSettings({ terminalShell: DEFAULT_UNIFIED_SETTINGS.terminalShell })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Select
-              value={mixedTerminalShell ? null : settings.terminalShell}
-              onValueChange={(value) => {
-                if (value !== null) updateSettings({ terminalShell: value as TerminalShell });
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-full sm:w-48"
-                aria-label="Default terminal shell"
-              >
-                <SelectValue>{mixedTerminalShell ? "Mixed" : terminalShellLabel}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {terminalShellOptions.map((option) => (
-                  <SelectItem hideIndicator key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
-
         <SettingsRow
           serverScoped
           settingKeys={["responseStreamingMode"]}

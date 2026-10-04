@@ -33,7 +33,6 @@ import {
   type TerminalRestartInput,
   type TerminalSessionSnapshot,
   type TerminalSessionStatus,
-  type TerminalShell,
   type TerminalSummary,
   type TerminalWriteInput,
   ClaudeSettings,
@@ -487,17 +486,6 @@ function defaultShellResolver(platform: NodeJS.Platform, env: NodeJS.ProcessEnv)
   return env.SHELL ?? "bash";
 }
 
-function shellCommandForPreference(
-  preference: TerminalShell,
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv,
-): string {
-  if (preference === "system") {
-    return defaultShellResolver(platform, env);
-  }
-  return platform === "win32" ? `${preference}.exe` : preference;
-}
-
 function normalizeShellCommand(
   value: string | undefined,
   platform: NodeJS.Platform,
@@ -586,12 +574,12 @@ function uniqueShellCandidates(candidates: Array<ShellCandidate | null>): ShellC
 }
 
 function resolveShellCandidates(
-  requestedShell: string,
+  shellResolver: () => string,
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv,
 ): ShellCandidate[] {
   const requested = shellCandidateFromCommand(
-    normalizeShellCommand(requestedShell, platform),
+    normalizeShellCommand(shellResolver(), platform),
     platform,
   );
 
@@ -1353,7 +1341,6 @@ interface TerminalManagerOptions {
   historyByteLimit?: number;
   ptyAdapter: PtyAdapter.PtyAdapter["Service"];
   shellResolver?: () => string;
-  shellPreference?: Effect.Effect<TerminalShell>;
   env?: NodeJS.ProcessEnv;
   subprocessInspector?: TerminalSubprocessInspector;
   processTable?: Effect.Effect<
@@ -1425,10 +1412,10 @@ export const resolveProviderInstanceTerminalEnvironment = Effect.fn(
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("TerminalManager.make")(function* () {
   const { terminalLogsDir } = yield* ServerConfig.ServerConfig;
-  const serverSettings = yield* ServerSettings.ServerSettingsService;
   const ptyAdapter = yield* PtyAdapter.PtyAdapter;
   const portDiscovery = yield* PortScanner.PortDiscovery;
   const nativeTelemetry = yield* NativeTelemetryClient.NativeTelemetryClient;
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
   const path = yield* Path.Path;
   const resolveProviderInstanceEnvironment = Effect.fn(
     "terminal.resolveProviderInstanceEnvironment",
@@ -1443,14 +1430,6 @@ export const make = Effect.fn("TerminalManager.make")(function* () {
   return yield* makeWithOptions({
     logsDir: terminalLogsDir,
     ptyAdapter,
-    shellPreference: serverSettings.getSettings.pipe(
-      Effect.map((settings) => settings.terminalShell),
-      Effect.catch((cause) =>
-        Effect.logWarning("Could not read terminal shell preference; using the system default.", {
-          cause,
-        }).pipe(Effect.as("system" as const)),
-      ),
-    ),
     processTable: nativeTelemetry.processTable.pipe(
       Effect.mapError(
         (cause) => new TerminalSubprocessCheckError({ cause, command: "resource-monitor" }),
@@ -1480,7 +1459,6 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   // `options.env` is the test seam.
   const baseEnv = options.env ?? process.env;
   const shellResolver = options.shellResolver ?? (() => defaultShellResolver(platform, baseEnv));
-  const shellPreference = options.shellPreference ?? Effect.succeed("system" as const);
   const processRunner = yield* ProcessRunner.ProcessRunner;
   const resolveLaunchInputEnvironment = Effect.fn("terminal.resolveLaunchInputEnvironment")(
     function* <Input extends TerminalOpenInput | TerminalAttachInput | TerminalRestartInput>(
@@ -2258,12 +2236,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       increment(terminalSessionsTotal, { lifecycle: eventType }).pipe(
         Effect.andThen(
           Effect.gen(function* () {
-            const preferredShell = yield* shellPreference;
-            const requestedShell =
-              preferredShell === "system"
-                ? shellResolver()
-                : shellCommandForPreference(preferredShell, platform, baseEnv);
-            const shellCandidates = resolveShellCandidates(requestedShell, platform, baseEnv);
+            const shellCandidates = resolveShellCandidates(shellResolver, platform, baseEnv);
             const terminalEnv = createTerminalSpawnEnv(baseEnv, session.runtimeEnv);
             const spawnResult = yield* trySpawn(shellCandidates, terminalEnv, session);
             ptyProcess = spawnResult.process;

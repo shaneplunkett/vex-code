@@ -15,12 +15,7 @@ import {
   useRemoteOpenState,
 } from "../../remoteOpen";
 import { useEnvironment } from "../../state/environments";
-import {
-  ChevronDownIcon,
-  FolderClosedIcon,
-  SquareArrowOutUpRightIcon,
-  TerminalSquare,
-} from "lucide-react";
+import { ChevronDownIcon, FolderClosedIcon, SquareArrowOutUpRightIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Group, GroupSeparator } from "../ui/group";
 import {
@@ -64,7 +59,6 @@ import {
 import { cn, isMacPlatform, isWindowsPlatform } from "~/lib/utils";
 import { shellEnvironment } from "~/state/shell";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { isTerminalBackedEditor } from "~/editorLaunch";
 
 type OpenInOption = {
   label: string;
@@ -76,7 +70,6 @@ type OpenInOption = {
 export const resolveOpenInOptions = (
   platform: string,
   availableEditors: ReadonlyArray<EditorId>,
-  supportsTerminalEditors: boolean,
 ) => {
   const baseOptions: ReadonlyArray<Omit<OpenInOption, "label">> = [
     {
@@ -113,11 +106,6 @@ export const resolveOpenInOptions = (
       Icon: Zed,
       value: "zed",
       kind: "brand",
-    },
-    {
-      Icon: TerminalSquare,
-      value: "neovim",
-      kind: "generic",
     },
     {
       Icon: AntigravityIcon,
@@ -196,11 +184,7 @@ export const resolveOpenInOptions = (
   ];
   const availableEditorSet = new Set(availableEditors);
   return baseOptions
-    .filter(
-      (option) =>
-        availableEditorSet.has(option.value) &&
-        (supportsTerminalEditors || !isTerminalBackedEditor(option.value)),
-    )
+    .filter((option) => availableEditorSet.has(option.value))
     .map((option) => ({ ...option, label: editorLabelForPlatform(option.value, platform) }));
 };
 
@@ -216,7 +200,6 @@ export const OpenInPicker = memo(function OpenInPicker({
   presentation = "toolbar",
   compact = false,
   enableShortcut = true,
-  onOpenInTerminalEditor,
 }: {
   environmentId: EnvironmentId;
   keybindings: ResolvedKeybindingsConfig;
@@ -225,7 +208,6 @@ export const OpenInPicker = memo(function OpenInPicker({
   presentation?: "toolbar" | "menu";
   compact?: boolean;
   enableShortcut?: boolean;
-  onOpenInTerminalEditor?: (editor: EditorId, cwd: string) => unknown;
 }) {
   const openInEditorMutation = useAtomCommand(shellEnvironment.openInEditor, "open in editor");
   const remote = useRemoteOpenState(environmentId);
@@ -235,13 +217,11 @@ export const OpenInPicker = memo(function OpenInPicker({
   // Remote mode ignores the server's PATH probe: what matters is what runs on
   // the viewing machine, which only the desktop app can probe.
   const effectiveEditors = remote.mode === "local-exec" ? availableEditors : remoteCapableEditors;
+  const [preferredEditor, setPreferredEditor] = usePreferredEditor(effectiveEditors);
   const options = useMemo(
-    () =>
-      resolveOpenInOptions(navigator.platform, effectiveEditors, Boolean(onOpenInTerminalEditor)),
-    [effectiveEditors, onOpenInTerminalEditor],
+    () => resolveOpenInOptions(navigator.platform, effectiveEditors),
+    [effectiveEditors],
   );
-  const supportedEditors = useMemo(() => options.map(({ value }) => value), [options]);
-  const [preferredEditor, setPreferredEditor] = usePreferredEditor(supportedEditors);
   const primaryOption = options.find(({ value }) => value === preferredEditor) ?? null;
 
   const openInEditor = useCallback(
@@ -266,22 +246,19 @@ export const OpenInPicker = memo(function OpenInPicker({
         });
         return;
       }
-      const result = isTerminalBackedEditor(editor)
-        ? onOpenInTerminalEditor?.(editor, openInCwd)
-        : openInEditorMutation({
-            environmentId,
-            input: {
-              cwd: openInCwd,
-              editor,
-            },
-          });
+      const result = openInEditorMutation({
+        environmentId,
+        input: {
+          cwd: openInCwd,
+          editor,
+        },
+      });
       setPreferredEditor(editor);
       return result;
     },
     [
       environmentId,
       markRemoteHintSeen,
-      onOpenInTerminalEditor,
       openInCwd,
       openInEditorMutation,
       preferredEditor,

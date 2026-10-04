@@ -10,12 +10,10 @@ import {
   type ThemeAppearance,
   type ThemeColors,
 } from "@t3tools/shared/themePalettes";
-import type { ThemePreviewColors } from "@t3tools/shared/themePreview";
 import {
-  VEX_MOBILE_APP_NAME,
-  VEX_MOBILE_THEME_PREVIEW_COLORS,
-  VEX_MOBILE_THEME_VARIABLES,
-} from "../vex/theme.ts";
+  STANDARD_THEME_PREVIEW_COLORS,
+  type ThemePreviewColors,
+} from "@t3tools/shared/themePreview";
 
 export const DEFAULT_MOBILE_THEME_ID = MOBILE_DEFAULT_THEME_ID;
 export const MOBILE_THEME_IDS = [...SHARED_MOBILE_THEME_IDS, "material-you"] as const;
@@ -28,7 +26,7 @@ export const MOBILE_THEME_OPTIONS: ReadonlyArray<{
   readonly id: MobileThemeId;
   readonly label: string;
 }> = [
-  { id: DEFAULT_MOBILE_THEME_ID, label: VEX_MOBILE_APP_NAME },
+  { id: DEFAULT_MOBILE_THEME_ID, label: "T3 Code" },
   { id: "material-you", label: "Material You" },
   ...BUILT_IN_THEMES.map((theme) => ({ id: theme.id as MobileThemeId, label: theme.label })),
 ];
@@ -390,11 +388,7 @@ export function getMobileThemeVariables(
           ),
         }
       : colors;
-  // Vex replaces the compatible default palette; every other theme keeps the shared derivation.
-  const baseVariables =
-    themeId === DEFAULT_MOBILE_THEME_ID
-      ? VEX_MOBILE_THEME_VARIABLES[appearance]
-      : createMobileThemeVariables(mobileColors, appearance, groupedCard);
+  const baseVariables = createMobileThemeVariables(mobileColors, appearance, groupedCard);
 
   // The complete base record guarantees that optional overrides cannot leave a token undefined.
   return overrides ? ({ ...baseVariables, ...overrides } as MobileThemeVariables) : baseVariables;
@@ -405,7 +399,7 @@ export function getMobileThemePreviewColors(
   appearance: MobileThemeAppearance,
 ): ThemePreviewColors {
   if (themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you")
-    return VEX_MOBILE_THEME_PREVIEW_COLORS[appearance];
+    return STANDARD_THEME_PREVIEW_COLORS[appearance];
   const theme = BUILT_IN_THEMES.find((candidate) => candidate.id === themeId) ?? T3_CHAT_THEME;
   const colors = getThemeColorsForAppearance(theme, appearance) ?? theme.colors;
   return {

@@ -57,7 +57,6 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
-  WorkspaceEnvironmentRequestError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
   RelayClientInstallFailedError,
@@ -117,7 +116,6 @@ import * as ProviderMaintenance from "./provider/providerMaintenance.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
-import { makeWorkspaceEnvironmentManager } from "./provider/WorkspaceEnvironment.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
 import { makeProviderInstallation } from "./provider/providerInstallation.ts";
@@ -582,7 +580,6 @@ const makeWsRpcLayer = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
-      const workspaceEnvironment = yield* makeWorkspaceEnvironmentManager();
       const canReplayPersistedRange = Effect.fnUntraced(function* (
         afterSequence: number,
         headSequence: number,
@@ -1589,10 +1586,6 @@ const makeWsRpcLayer = (
                 }),
               }));
               targetWorktreePath = worktree.worktree.path;
-              yield* workspaceEnvironment.prepareWorktree({
-                sourceCwd: bootstrap.prepareWorktree.projectCwd,
-                targetCwd: targetWorktreePath,
-              });
               yield* dispatchFromClient({
                 type: "thread.meta.update",
                 commandId: yield* serverCommandId("bootstrap-thread-meta-update"),
@@ -3150,36 +3143,6 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "workspace" },
           ),
-        [WS_METHODS.workspaceEnvironmentInspect]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.workspaceEnvironmentInspect,
-            workspaceEnvironment.inspect(input.cwd).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new WorkspaceEnvironmentRequestError({
-                    cwd: input.cwd,
-                    message: cause.message,
-                    cause,
-                  }),
-              ),
-            ),
-            { "rpc.aggregate": "workspace" },
-          ),
-        [WS_METHODS.workspaceEnvironmentAllow]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.workspaceEnvironmentAllow,
-            workspaceEnvironment.allow(input.cwd).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new WorkspaceEnvironmentRequestError({
-                    cwd: input.cwd,
-                    message: cause.message,
-                    cause,
-                  }),
-              ),
-            ),
-            { "rpc.aggregate": "workspace" },
-          ),
         [WS_METHODS.shellOpenInEditor]: (input) =>
           observeRpcEffect(WS_METHODS.shellOpenInEditor, externalLauncher.launchEditor(input), {
             "rpc.aggregate": "workspace",
@@ -3416,12 +3379,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.gitPreparePullRequestThread,
             gitWorkflow
-              .preparePullRequestThread(input, {
-                prepareWorktreeEnvironment: ({ sourceCwd, targetCwd }) =>
-                  workspaceEnvironment
-                    .prepareWorktree({ sourceCwd, targetCwd })
-                    .pipe(Effect.asVoid),
-              })
+              .preparePullRequestThread(input)
               .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "git" },
           ),
@@ -3432,25 +3390,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           observeRpcEffect(
             WS_METHODS.vcsCreateWorktree,
-            gitWorkflow.createWorktree(input).pipe(
-              Effect.tap((result) =>
-                workspaceEnvironment
-                  .prepareWorktree({
-                    sourceCwd: input.cwd,
-                    targetCwd: result.worktree.path,
-                  })
-                  .pipe(
-                    Effect.catch((cause) =>
-                      Effect.logWarning("Could not prepare direnv environment for worktree", {
-                        sourceCwd: input.cwd,
-                        targetCwd: result.worktree.path,
-                        detail: cause.message,
-                      }),
-                    ),
-                  ),
-              ),
-              Effect.tap(() => refreshGitStatus(input.cwd)),
-            ),
+            gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
             { "rpc.aggregate": "vcs" },
           ),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>

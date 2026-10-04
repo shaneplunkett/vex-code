@@ -115,10 +115,6 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
-import {
-  resolveProviderSessionEnvironment,
-  type ProviderSessionEnvironmentOptions,
-} from "../WorkspaceEnvironment.ts";
 import { spawnAndCollect } from "../providerSnapshot.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
@@ -229,7 +225,6 @@ const remapClaudeForkTurnBoundaries = (
 };
 
 const PROVIDER = ProviderDriverKind.make("claudeAgent");
-const CLAUDE_PROTECTED_ENVIRONMENT_VARIABLES = ["HOME"] as const;
 type ClaudeTextStreamKind = Extract<
   RuntimeContentStreamKind,
   "assistant_text" | "reasoning_text" | "reasoning_summary_text"
@@ -418,7 +413,6 @@ interface ClaudeSessionContext {
   readonly turnStartMessageIds: Array<string | null>;
   readonly promptQueue: Queue.Queue<PromptQueueItem>;
   readonly query: ClaudeQueryRuntime;
-  readonly claudeEnvironment: NodeJS.ProcessEnv;
   streamFiber: Fiber.Fiber<void, Error> | undefined;
   readonly startedAt: string;
   readonly basePermissionMode: PermissionMode | undefined;
@@ -475,8 +469,9 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly close: () => void;
 }
 
-export interface ClaudeAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
+export interface ClaudeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
+  readonly environment?: NodeJS.ProcessEnv;
   readonly createQuery?: (input: {
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: ClaudeQueryOptions;
@@ -2088,6 +2083,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const serverConfig = yield* ServerConfig;
   const crypto = yield* Crypto.Crypto;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, options?.environment).pipe(
+    Effect.provideService(Path.Path, path),
+  );
+  const claudeSdkExecutablePath = yield* resolveClaudeSdkExecutablePath(
+    claudeSettings.binaryPath,
+    claudeEnvironment,
+  );
   const nativeEventLogger =
     options?.nativeEventLogger ??
     (options?.nativeEventLogPath !== undefined
@@ -3453,7 +3455,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       // generic API error, so retain that evidence for the result fallback.
       if (message.error === "authentication_failed") {
         context.turnState.authenticationFailureMessage = claudeSignedOutMessage({
-          configDir: context.claudeEnvironment.CLAUDE_CONFIG_DIR,
+          configDir: claudeEnvironment.CLAUDE_CONFIG_DIR,
           cwd: path.resolve(context.session.cwd ?? "."),
         });
       }
@@ -4397,24 +4399,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         });
       }
 
-      const cwd = input.cwd ?? serverConfig.cwd;
-      const workspaceEnvironment =
-        (yield* resolveProviderSessionEnvironment({
-          sessionEnvironment: options?.sessionEnvironment,
-          cwd,
-          provider: PROVIDER,
-          threadId: input.threadId,
-          protectedVariables: CLAUDE_PROTECTED_ENVIRONMENT_VARIABLES,
-        })) ?? process.env;
-      const claudeEnvironment = yield* makeClaudeEnvironment(
-        claudeSettings,
-        workspaceEnvironment,
-      ).pipe(Effect.provideService(Path.Path, path));
-      const claudeSdkExecutablePath = yield* resolveClaudeSdkExecutablePath(
-        claudeSettings.binaryPath,
-        claudeEnvironment,
-      );
-
       const existingContext = sessions.get(input.threadId);
       if (existingContext) {
         yield* Effect.logWarning("claude.session.replacing", {
@@ -5048,7 +5032,6 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           : Array.from({ length: resumeState?.turnCount ?? 0 }, () => null),
         promptQueue,
         query: queryRuntime,
-        claudeEnvironment,
         streamFiber: undefined,
         startedAt,
         basePermissionMode: permissionMode,
@@ -5264,7 +5247,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const skills = yield* discoverClaudeSkills(
       claudeSettings,
       context.session.cwd,
-      context.claudeEnvironment,
+      claudeEnvironment,
     ).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
@@ -5398,7 +5381,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
             ChildProcess.make(
               process.execPath,
               [...historyWorkerArguments, method, historySessionId, encodeHistoryArgs(args)],
-              { env: { ...context.claudeEnvironment, ELECTRON_RUN_AS_NODE: "1" } },
+              { env: { ...claudeEnvironment, ELECTRON_RUN_AS_NODE: "1" } },
             ),
           ).pipe(
             Effect.timeout("30 seconds"),
@@ -5417,7 +5400,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
             };
             if (options?.getSessionMessages)
               return options.getSessionMessages(historySessionId, readOptions);
-            if (context.claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
+            if (claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
               return getSessionMessages(historySessionId, readOptions);
             }
             return decodeSessionMessages(
@@ -5476,7 +5459,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                 upToMessageId: rollbackAt,
               };
               if (options?.forkSession) return options.forkSession(sessionId, forkOptions);
-              if (context.claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
+              if (claudeEnvironment.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) {
                 return forkSession(sessionId, forkOptions);
               }
               return decodeHistoryFork(await runScopedHistoryCommand("forkSession", forkOptions));

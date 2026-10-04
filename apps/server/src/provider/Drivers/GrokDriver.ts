@@ -27,7 +27,7 @@ import {
   type ProviderInstance,
 } from "../ProviderDriver.ts";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
-import { makeProviderSessionEnvironment } from "../WorkspaceEnvironment.ts";
+import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import { discoverGrokSkills } from "./GrokSkills.ts";
 import {
   makeCachedProviderMaintenanceResolution,
@@ -100,10 +100,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
       const serverSettings = yield* ServerSettingsService;
       const { cwd } = yield* ServerConfig;
       const eventLoggers = yield* ProviderEventLoggers;
-      const sessionEnvironment = yield* makeProviderSessionEnvironment({
-        providerEnvironment: environment,
-      });
-      const processEnv = sessionEnvironment.processEnvironment;
+      const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -127,7 +124,7 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         ),
       );
       const adapter = yield* makeGrokAdapter(effectiveConfig, {
-        sessionEnvironment,
+        environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
       });

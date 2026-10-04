@@ -11,12 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { DIFF_THEME_NAMES, resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
+import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "../lib/syntaxHighlighting";
 
 export class DiffWorkerError extends Schema.TaggedError<DiffWorkerError>()("DiffWorkerError", {
   operation: Schema.Literals(["create-worker", "get-render-options", "set-render-options"]),
-  themeName: Schema.Literals([DIFF_THEME_NAMES.light, DIFF_THEME_NAMES.dark]),
+  themeName: Schema.Literals(["pierre-light", "pierre-dark"]),
   cause: Schema.Defect(),
 }) {
   override get message(): string {

@@ -7,6 +7,8 @@ import jsxLanguage from "@shikijs/langs/jsx";
 import tsxLanguage from "@shikijs/langs/tsx";
 import typescriptLanguage from "@shikijs/langs/typescript";
 import yamlLanguage from "@shikijs/langs/yaml";
+import githubDarkDefault from "@shikijs/themes/github-dark-default";
+import githubLightDefault from "@shikijs/themes/github-light-default";
 import { getFiletypeFromFileName } from "@pierre/diffs/utils/getFiletypeFromFileName";
 import * as Schema from "effect/Schema";
 
@@ -17,10 +19,6 @@ import {
 import { createIncrementalSnippet } from "./incrementalSnippet";
 import type { ReviewRenderableLineRow } from "./reviewModel";
 import { applyDiffRangesToTokens, computeWordAltDiffRanges } from "./reviewWordDiffs";
-import {
-  VEX_MOBILE_SHIKI_THEMES,
-  VEX_MOBILE_SHIKI_THEME_NAME_BY_SCHEME,
-} from "../../vex/codeTheme";
 
 export type ReviewDiffTheme = "light" | "dark";
 
@@ -41,7 +39,10 @@ import type { ReviewHighlightedToken } from "./reviewHighlightedToken.types";
 
 export type { ReviewHighlightedToken } from "./reviewHighlightedToken.types";
 
-const SHIKI_THEME_NAME_BY_SCHEME = VEX_MOBILE_SHIKI_THEME_NAME_BY_SCHEME;
+const SHIKI_THEME_NAME_BY_SCHEME = {
+  light: "github-light-default",
+  dark: "github-dark-default",
+} as const;
 const REVIEW_HIGHLIGHTER_ENGINE_ENV_VALUE =
   process.env.EXPO_PUBLIC_REVIEW_HIGHLIGHTER_ENGINE ??
   (process.env.NODE_ENV === "test" ? "javascript" : "native");
@@ -229,7 +230,7 @@ async function getHighlighter(): Promise<HighlighterCore> {
         preference: REVIEW_HIGHLIGHTER_ENGINE_PREFERENCE,
       });
 
-      const themes = [...VEX_MOBILE_SHIKI_THEMES];
+      const themes = [githubLightDefault, githubDarkDefault];
 
       if (REVIEW_HIGHLIGHTER_ENGINE_PREFERENCE !== "javascript") {
         try {

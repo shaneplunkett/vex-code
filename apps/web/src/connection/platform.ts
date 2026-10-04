@@ -42,7 +42,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { FetchHttpClient } from "effect/unstable/http";
 
-import { APP_BASE_NAME, APP_VERSION } from "../branding";
+import { APP_VERSION } from "../branding";
 import { readDesktopPrimaryBearerToken } from "../environments/primary/desktopAuth";
 import { primaryEnvironmentHttpLayer } from "../environments/primary/httpLayer";
 import {
@@ -118,7 +118,6 @@ const wakeupsLayer = Wakeups.layer({
 
 function clientMetadata() {
   return clientPresentationMetadata({
-    appBaseName: APP_BASE_NAME,
     appVersion: APP_VERSION,
     hosted: isHostedStaticApp(),
     identity: {

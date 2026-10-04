@@ -98,13 +98,6 @@ interface SourceControlTextGenerationSettings {
   readonly style: SourceControlWritingStyleSettings;
 }
 
-export interface GitPreparePullRequestThreadOptions {
-  readonly prepareWorktreeEnvironment?: (input: {
-    readonly sourceCwd: string;
-    readonly targetCwd: string;
-  }) => Effect.Effect<void, { readonly message: string }>;
-}
-
 export class GitManager extends Context.Service<
   GitManager,
   {
@@ -131,7 +124,6 @@ export class GitManager extends Context.Service<
     ) => Effect.Effect<GitResolvePullRequestResult, GitManagerServiceError>;
     readonly preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
-      options?: GitPreparePullRequestThreadOptions,
     ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
     readonly runStackedAction: (
       input: GitRunStackedActionInput,
@@ -2337,7 +2329,7 @@ export const make = Effect.gen(function* () {
 
   const preparePullRequestThread: GitManager["Service"]["preparePullRequestThread"] = Effect.fn(
     "preparePullRequestThread",
-  )(function* (input, options) {
+  )(function* (input) {
     const maybeRunSetupScript = (worktreePath: string) => {
       if (!input.threadId) {
         return Effect.void;
@@ -2358,27 +2350,6 @@ export const make = Effect.gen(function* () {
           ),
         );
     };
-    const prepareWorktreeEnvironment = Effect.fn(
-      "GitManager.preparePullRequestWorktreeEnvironment",
-    )(function* (worktreePath: string) {
-      if (!options?.prepareWorktreeEnvironment) return;
-      yield* options
-        .prepareWorktreeEnvironment({
-          sourceCwd: input.cwd,
-          targetCwd: worktreePath,
-        })
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new GitManagerError({
-                operation: "preparePullRequestThread",
-                cwd: input.cwd,
-                detail: "Could not prepare the pull request worktree environment.",
-                cause,
-              }),
-          ),
-        );
-    });
     return yield* Effect.gen(function* () {
       const normalizedReference = normalizePullRequestReference(input.reference);
       const rootWorktreePath = yield* canonicalizeExistingPath(input.cwd);
@@ -2446,7 +2417,6 @@ export const make = Effect.gen(function* () {
           // a fork PR opened from "main" matches the user's own local main. That checkout is
           // somebody else's work, so it keeps its tracking config and nothing else.
           yield* ensureExistingWorktreeUpstream(worktreePath);
-          yield* prepareWorktreeEnvironment(worktreePath);
           return {
             pullRequest,
             branch: localPullRequestBranch,
@@ -2466,7 +2436,6 @@ export const make = Effect.gen(function* () {
           );
 
         yield* ensureExistingWorktreeUpstream(worktreePath);
-        yield* prepareWorktreeEnvironment(worktreePath);
 
         const refreshed = yield* gitCore
           // The pull request's own ref, because it is the only thing that certainly names its
@@ -2621,7 +2590,6 @@ export const make = Effect.gen(function* () {
         },
       );
       yield* ensureExistingWorktreeUpstream(worktree.worktree.path);
-      yield* prepareWorktreeEnvironment(worktree.worktree.path);
       yield* maybeRunSetupScript(worktree.worktree.path);
 
       return {

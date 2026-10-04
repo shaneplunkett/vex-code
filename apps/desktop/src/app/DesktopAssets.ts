@@ -62,9 +62,16 @@ const resolveResourcePath = Effect.fn("desktop.assets.resolveResourcePath")(func
 });
 
 const sourceTreeIconFileNames = {
-  ico: "vex-code-windows.ico",
-  macPng: "vex-code-macos-1024.png",
-  universalPng: "vex-code-universal-1024.png",
+  dev: {
+    ico: "blueprint-windows.ico",
+    macPng: "blueprint-macos-1024.png",
+    universalPng: "blueprint-universal-1024.png",
+  },
+  prod: {
+    ico: "t3-black-windows.ico",
+    macPng: "black-macos-1024.png",
+    universalPng: "black-universal-1024.png",
+  },
 } as const;
 
 function resolveSourceTreeIconPath(
@@ -72,13 +79,15 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
+  const brand = environment.isDevelopment ? "dev" : "prod";
+  const fileNames = sourceTreeIconFileNames[brand];
   const fileName =
     ext === "ico"
-      ? sourceTreeIconFileNames.ico
+      ? fileNames.ico
       : environment.platform === "darwin"
-        ? sourceTreeIconFileNames.macPng
-        : sourceTreeIconFileNames.universalPng;
-  return environment.path.join(environment.rootDir, "assets", "vex", fileName);
+        ? fileNames.macPng
+        : fileNames.universalPng;
+  return environment.path.join(environment.rootDir, "assets", brand, fileName);
 }
 
 const resolveIconPath = Effect.fn("desktop.assets.resolveIconPath")(function* (

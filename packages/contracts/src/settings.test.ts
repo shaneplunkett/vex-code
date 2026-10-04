@@ -5,7 +5,6 @@ import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
-  DEFAULT_TERMINAL_SHELL,
   ClaudeSettings,
   DEFAULT_SERVER_SETTINGS,
   resolveProviderInstanceEnabled,
@@ -880,20 +879,6 @@ describe("ServerSettings.sourceControlWritingStyle", () => {
       mode: "custom",
       customInstructions: "Prefer concise wording.",
     });
-  });
-});
-
-describe("ServerSettings terminal shell", () => {
-  it("uses the system shell for legacy configs", () => {
-    expect(decodeServerSettings({}).terminalShell).toBe(DEFAULT_TERMINAL_SHELL);
-  });
-
-  it("accepts supported shell updates", () => {
-    expect(decodeServerSettingsPatch({ terminalShell: "fish" }).terminalShell).toBe("fish");
-  });
-
-  it("rejects unknown shell values", () => {
-    expect(() => decodeServerSettingsPatch({ terminalShell: "elvish" })).toThrow();
   });
 });
 

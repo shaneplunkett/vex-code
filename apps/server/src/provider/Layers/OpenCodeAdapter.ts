@@ -46,10 +46,6 @@ import {
 import { buildRuntimeInstructions } from "../RuntimeInstructions.ts";
 import { type OpenCodeAdapterShape } from "../Services/OpenCodeAdapter.ts";
 import {
-  resolveProviderSessionEnvironment,
-  type ProviderSessionEnvironmentOptions,
-} from "../WorkspaceEnvironment.ts";
-import {
   buildOpenCodePermissionRules,
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -461,8 +457,9 @@ function takeOpenCodeTurnTokenUsage(
   };
 }
 
-export interface OpenCodeAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
+export interface OpenCodeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
+  readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
 }
@@ -2837,16 +2834,6 @@ export function makeOpenCodeAdapter(
         const serverUrl = openCodeSettings.serverUrl;
         const serverPassword = openCodeSettings.serverPassword;
         const directory = input.cwd ?? serverConfig.cwd;
-        // A configured server already runs outside Vex Code, so its process
-        // environment cannot be changed. Do not evaluate direnv only to discard it.
-        const sessionEnvironment = serverUrl
-          ? undefined
-          : yield* resolveProviderSessionEnvironment({
-              sessionEnvironment: options?.sessionEnvironment,
-              cwd: directory,
-              provider: PROVIDER,
-              threadId: input.threadId,
-            });
         const resumeSessionId = parseOpenCodeResume(input.resumeCursor)?.sessionId;
         const existing = sessions.get(input.threadId);
         if (existing) {
@@ -2871,7 +2858,7 @@ export function makeOpenCodeAdapter(
                 serverUrl,
                 ...(serverPassword ? { serverPassword } : {}),
                 environment: McpProviderSession.withAgentDeviceEnvironment(
-                  sessionEnvironment ?? process.env,
+                  options?.environment ?? process.env,
                   mcpSession,
                 ),
               });

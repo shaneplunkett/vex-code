@@ -10,7 +10,7 @@ describe("resolveOpenInOptions", () => {
     ["Win32", "File Explorer", FileExplorerIcon],
     ["Linux x86_64", "Files", FolderClosedIcon],
   ] as const)("includes the file manager with its icon on %s", (platform, label, Icon) => {
-    expect(resolveOpenInOptions(platform, ["cursor", "vscode", "file-manager"], false)).toEqual([
+    expect(resolveOpenInOptions(platform, ["cursor", "vscode", "file-manager"])).toEqual([
       expect.objectContaining({ value: "cursor", label: "Cursor" }),
       expect.objectContaining({ value: "vscode", label: "VS Code" }),
       expect.objectContaining({ value: "file-manager", label, Icon }),
@@ -18,20 +18,9 @@ describe("resolveOpenInOptions", () => {
   });
 
   it("omits the file manager when unavailable or using remote editors", () => {
-    expect(resolveOpenInOptions("MacIntel", ["vscode"], false)).toEqual([
+    expect(resolveOpenInOptions("MacIntel", ["vscode"])).toEqual([
       expect.objectContaining({ value: "vscode" }),
     ]);
-    expect(resolveOpenInOptions("MacIntel", [], false)).toEqual([]);
-  });
-
-  it("offers Neovim only when the caller can provide an embedded terminal", () => {
-    expect(
-      resolveOpenInOptions("Linux", ["neovim", "file-manager"], false).map(
-        (option) => option.value,
-      ),
-    ).toEqual(["file-manager"]);
-    expect(
-      resolveOpenInOptions("Linux", ["neovim", "file-manager"], true).map((option) => option.value),
-    ).toEqual(["neovim", "file-manager"]);
+    expect(resolveOpenInOptions("MacIntel", [])).toEqual([]);
   });
 });

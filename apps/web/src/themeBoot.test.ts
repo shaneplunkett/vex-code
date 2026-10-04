@@ -22,7 +22,6 @@ const THEME_STORAGE_KEY = "t3code:theme";
 // A custom theme that omits chrome falls back to the runtime default, so the
 // boot copy of that default stays derived from the real palette.
 const DEFAULT_DARK_CHROME = getDefaultThemeColors("dark").chrome;
-const VEX_LIGHT_CHROME = "#e6e9ef";
 
 const bootScript = (() => {
   const match = indexHtml.match(/<script>([\s\S]*?)<\/script>/);
@@ -494,8 +493,8 @@ describe("index.html boot script", () => {
 
     expect(boot.themeId).toBeUndefined();
     expect(boot.themeSelected).toBeUndefined();
-    expect(boot.backgroundColor).toBe(VEX_LIGHT_CHROME);
-    expect(boot.metaContent).toBe(VEX_LIGHT_CHROME);
+    expect(boot.backgroundColor).toBe("#ffffff");
+    expect(boot.metaContent).toBe("#ffffff");
   });
 
   it("leaves unknown preferences unthemed so the runtime default applies", () => {

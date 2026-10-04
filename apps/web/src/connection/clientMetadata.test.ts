@@ -18,7 +18,6 @@ describe("client telemetry metadata", () => {
   it("distinguishes hosted web from server-served web", () => {
     expect(
       clientPresentationMetadata({
-        appBaseName: "T3 Code",
         appVersion: "1.2.3",
         hosted: true,
         identity: desktopChrome,
@@ -35,7 +34,6 @@ describe("client telemetry metadata", () => {
 
     expect(
       clientPresentationMetadata({
-        appBaseName: "T3 Code",
         appVersion: "0.0.0",
         hosted: false,
         identity: desktopChrome,
@@ -76,7 +74,6 @@ describe("client telemetry metadata", () => {
   it("uses Electron's client platform for desktop", () => {
     expect(
       clientPresentationMetadata({
-        appBaseName: "T3 Code",
         appVersion: "1.2.3",
         hosted: false,
         identity: desktopChrome,

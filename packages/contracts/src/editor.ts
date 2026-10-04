@@ -10,7 +10,6 @@ type EditorDefinition = {
   readonly commands: readonly [string, ...string[]] | null;
   readonly baseArgs?: readonly string[];
   readonly launchStyle: EditorLaunchStyle;
-  readonly launchMode?: "external" | "terminal";
   /**
    * URL scheme for editors that support VS Code's remote deep links
    * (`<scheme>://vscode-remote/ssh-remote+<host><path>`). Only set for VS Code
@@ -59,13 +58,6 @@ export const EDITORS = [
     commands: ["zed", "zeditor"],
     launchStyle: "direct-path",
     remoteScheme: "zed",
-  },
-  {
-    id: "neovim",
-    label: "Neovim",
-    commands: ["nvim"],
-    launchStyle: "direct-path",
-    launchMode: "terminal",
   },
   {
     id: "antigravity",

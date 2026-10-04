@@ -86,45 +86,9 @@ import {
   shouldShowBranchMismatchBanner,
   shouldShowPlanFollowUpPrompt,
   shouldWriteThreadErrorToCurrentServerThread,
-  workspaceEnvironmentSendDecision,
   waitForRevertedMessage,
   prepareRevertedMessageAttachments,
 } from "./ChatView.logic";
-
-describe("workspaceEnvironmentSendDecision", () => {
-  it("blocks a send when the workspace .envrc needs approval", () => {
-    expect(
-      workspaceEnvironmentSendDecision({
-        cwd: "/repo",
-        readyCwd: null,
-        status: { _tag: "approvalRequired", envrcPath: "/repo/.envrc" },
-        isPending: false,
-      }),
-    ).toBe("approvalRequired");
-  });
-
-  it("uses the just-approved cwd while the status query refreshes", () => {
-    expect(
-      workspaceEnvironmentSendDecision({
-        cwd: "/repo",
-        readyCwd: "/repo",
-        status: { _tag: "approvalRequired", envrcPath: "/repo/.envrc" },
-        isPending: true,
-      }),
-    ).toBe("ready");
-  });
-
-  it("inspects when no status has loaded yet", () => {
-    expect(
-      workspaceEnvironmentSendDecision({
-        cwd: "/repo",
-        readyCwd: null,
-        status: null,
-        isPending: true,
-      }),
-    ).toBe("inspect");
-  });
-});
 
 describe("agent browser close confirmation", () => {
   const surfaces = [

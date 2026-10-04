@@ -1172,7 +1172,6 @@ export function deriveEffectiveComposerModelState(input: {
     | Pick<ComposerThreadDraftState, "modelSelectionByProvider" | "activeProvider">
     | null
     | undefined;
-  stickyModelSelectionByProvider?: Partial<Record<ProviderInstanceId, ModelSelection>>;
   providers: ReadonlyArray<ServerProvider>;
   selectedProvider: ProviderDriverKind;
   /**
@@ -1250,7 +1249,6 @@ export function deriveEffectiveComposerModelState(input: {
     modelSelectionByProviderToOptions(input.draft?.modelSelectionByProvider) ??
     providerSelectionsFromModelSelection(input.threadModelSelection) ??
     providerSelectionsFromModelSelection(input.projectModelSelection) ??
-    modelSelectionByProviderToOptions(input.stickyModelSelectionByProvider) ??
     null;
 
   return {
@@ -4233,15 +4231,11 @@ export function useEffectiveComposerModelState(input: {
   settings: UnifiedSettings;
 }): EffectiveComposerModelState {
   const draft = useComposerDraftModelState(input.threadRef ?? input.draftId ?? DraftId.make(""));
-  const stickyModelSelectionByProvider = useComposerDraftStore(
-    (state) => state.stickyModelSelectionByProvider,
-  );
 
   return useMemo(
     () =>
       deriveEffectiveComposerModelState({
         draft,
-        stickyModelSelectionByProvider,
         providers: input.providers,
         selectedProvider: input.selectedProvider,
         selectedInstanceId: input.selectedInstanceId,
@@ -4251,7 +4245,6 @@ export function useEffectiveComposerModelState(input: {
       }),
     [
       draft,
-      stickyModelSelectionByProvider,
       input.providers,
       input.settings,
       input.projectModelSelection,

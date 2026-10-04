@@ -2383,10 +2383,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
         }),
       );
       const adapter = yield* makeTestAdapter(wrapperPath, {
-        sessionEnvironment: {
-          processEnvironment: { ...process.env, GROK_HOME: grokHome },
-          resolve: () => Effect.succeed({ ...process.env, GROK_HOME: grokHome }),
-        },
+        environment: { ...process.env, GROK_HOME: grokHome },
       });
       const plans = yield* Ref.make<ReadonlyArray<string>>([]);
       const completed = yield* Deferred.make<void>();

@@ -50,7 +50,7 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
-import { makeProviderSessionEnvironment } from "../WorkspaceEnvironment.ts";
+import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makeCachedProviderMaintenanceResolution,
@@ -147,10 +147,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
       const modelManifest = yield* ModelManifest.ModelManifest;
-      const sessionEnvironment = yield* makeProviderSessionEnvironment({
-        providerEnvironment: environment,
-      });
-      const processEnv = sessionEnvironment.processEnvironment;
+      const processEnv = mergeProviderInstanceEnvironment(environment);
       const homeLayout = yield* resolveCodexHomeLayout(config);
       const continuationIdentity = codexContinuationIdentity(homeLayout);
       const stampIdentity = withInstanceIdentity({
@@ -254,7 +251,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       // above.
       const adapter = yield* makeCodexAdapter(effectiveConfig, {
         instanceId,
-        sessionEnvironment,
+        environment: processEnv,
         models,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });

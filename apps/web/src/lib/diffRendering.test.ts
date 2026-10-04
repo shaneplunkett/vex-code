@@ -8,17 +8,9 @@ import {
   buildPatchCacheKey,
   getDiffLineStat,
   getRenderablePatch,
-  resolveDiffThemeName,
   resolveFileDiffPath,
   resolveFileDiffPreviousPath,
 } from "./diffRendering";
-
-describe("resolveDiffThemeName", () => {
-  it("uses Catppuccin for file and diff rendering", () => {
-    expect(resolveDiffThemeName("light")).toBe("catppuccin-latte");
-    expect(resolveDiffThemeName("dark")).toBe("catppuccin-mocha");
-  });
-});
 
 describe("buildPatchCacheKey", () => {
   it("normalizes outer whitespace before hashing", () => {

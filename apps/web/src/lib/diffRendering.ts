@@ -2,11 +2,10 @@ import { parsePatchFiles } from "@pierre/diffs/utils/parsePatchFiles";
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs/types";
 import { unquoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
-import { VEX_CODE_THEME_NAMES } from "~/vex/theme";
 
-export const DIFF_THEME_NAMES = {
-  light: VEX_CODE_THEME_NAMES.light,
-  dark: VEX_CODE_THEME_NAMES.dark,
+const DIFF_THEME_NAMES = {
+  light: "pierre-light",
+  dark: "pierre-dark",
 } as const;
 
 export type DiffThemeName = (typeof DIFF_THEME_NAMES)[keyof typeof DIFF_THEME_NAMES];

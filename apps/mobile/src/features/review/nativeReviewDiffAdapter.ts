@@ -6,13 +6,8 @@ import type {
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 import type { ResolvedMobileCodeSurface } from "../../lib/appearancePreferences";
-import {
-  DEFAULT_MOBILE_THEME_ID,
-  type MobileThemeId,
-  type MobileThemeVariables,
-} from "../../lib/mobileTheme";
+import { type MobileThemeId, type MobileThemeVariables } from "../../lib/mobileTheme";
 import { getMobileTerminalTheme, type TerminalAppearanceScheme } from "../terminal/terminalTheme";
-import { resolveVexMobileReviewDiffTheme } from "../../vex/codeTheme";
 import { computeWordAltDiffRanges } from "./reviewWordDiffs";
 import {
   getReviewFilePreviewState,
@@ -178,10 +173,6 @@ export function createNativeReviewDiffTheme(
   themeId: MobileThemeId,
   appTheme: MobileThemeVariables,
 ): NativeReviewDiffTheme {
-  if (themeId === DEFAULT_MOBILE_THEME_ID) {
-    return resolveVexMobileReviewDiffTheme(scheme);
-  }
-
   const terminalTheme = getMobileTerminalTheme(themeId, scheme);
   const [, terminalRed] = terminalTheme.palette;
   // Swift expects #RRGGBB/#RRGGBBAA while Android expects #RRGGBB/#AARRGGBB.

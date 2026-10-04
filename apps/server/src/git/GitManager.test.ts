@@ -626,9 +626,8 @@ function resolvePullRequest(
 function preparePullRequestThread(
   manager: GitManager.GitManager["Service"],
   input: GitPreparePullRequestThreadInput,
-  options?: GitManager.GitPreparePullRequestThreadOptions,
 ) {
-  return manager.preparePullRequestThread(input, options);
+  return manager.preparePullRequestThread(input);
 }
 
 function makeManager(input?: {
@@ -4643,7 +4642,6 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       yield* runGit(repoDir, ["checkout", "main"]);
 
       const setupCalls: ProjectSetupScriptRunner.ProjectSetupScriptRunnerInput[] = [];
-      const worktreePreparationOrder: string[] = [];
       const { manager } = yield* makeManager({
         ghScenario: {
           pullRequest: {
@@ -4658,31 +4656,20 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         setupScriptRunner: {
           runForThread: (setupInput) =>
             Effect.sync(() => {
-              worktreePreparationOrder.push("setup");
               setupCalls.push(setupInput);
               return { status: "no-script" as const };
             }),
         },
       });
 
-      const result = yield* preparePullRequestThread(
-        manager,
-        {
-          cwd: repoDir,
-          reference: "177",
-          mode: "worktree",
-          threadId: asThreadId("thread-pr-setup"),
-        },
-        {
-          prepareWorktreeEnvironment: () =>
-            Effect.sync(() => {
-              worktreePreparationOrder.push("environment");
-            }),
-        },
-      );
+      const result = yield* preparePullRequestThread(manager, {
+        cwd: repoDir,
+        reference: "177",
+        mode: "worktree",
+        threadId: asThreadId("thread-pr-setup"),
+      });
 
       expect(result.worktreePath).not.toBeNull();
-      expect(worktreePreparationOrder).toEqual(["environment", "setup"]);
       expect(setupCalls).toHaveLength(1);
       expect(setupCalls[0]).toEqual({
         threadId: "thread-pr-setup",

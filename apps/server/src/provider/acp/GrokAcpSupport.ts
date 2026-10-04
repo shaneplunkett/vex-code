@@ -59,7 +59,6 @@ export function buildGrokAcpSpawnInput(
       ...environment,
       [GROK_OAUTH2_REFERRER_ENV]: T3_CODE_OAUTH_REFERRER,
     },
-    ...(environment ? { extendEnv: false } : {}),
   };
 }
 

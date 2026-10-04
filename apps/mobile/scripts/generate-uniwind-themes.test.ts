@@ -9,7 +9,6 @@ import {
   renderUniwindThemesCSS,
 } from "./generate-uniwind-themes.mts";
 import { readDefaultMobileThemeVariables } from "../src/lib/mobileTheme.test-support";
-import { VEX_MOBILE_THEME_VARIABLES } from "../src/vex/theme.ts";
 
 describe("generate mobile Uniwind themes", () => {
   it("keeps the committed outputs current", () => {
@@ -51,7 +50,10 @@ describe("generate mobile Uniwind themes", () => {
 
     expect(variables.light).toEqual(readDefaultMobileThemeVariables("light"));
     expect(variables.dark).toEqual(readDefaultMobileThemeVariables("dark"));
-    expect(variables).toEqual(VEX_MOBILE_THEME_VARIABLES);
+    expect(variables.light["--color-screen"]).toBe("#fcfcfc");
+    expect(variables.light["--color-drawer"]).toBe("#fafafa");
+    expect(variables.dark["--color-screen"]).toBe("#0a0a0a");
+    expect(variables.dark["--color-drawer"]).toBe("#000000");
     expect(Object.keys(variables.light)).toEqual(Object.keys(variables.dark));
   });
 

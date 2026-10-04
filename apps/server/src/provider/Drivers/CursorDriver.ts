@@ -42,7 +42,7 @@ import {
   type ProviderInstance,
 } from "../ProviderDriver.ts";
 import { withInstanceIdentity } from "./instanceIdentity.ts";
-import { makeProviderSessionEnvironment } from "../WorkspaceEnvironment.ts";
+import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
   makeCachedProviderMaintenanceResolution,
   makeManualOnlyProviderMaintenanceCapabilities,
@@ -108,10 +108,7 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
       const httpClient = yield* HttpClient.HttpClient;
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
-      const sessionEnvironment = yield* makeProviderSessionEnvironment({
-        providerEnvironment: environment,
-      });
-      const processEnv = sessionEnvironment.processEnvironment;
+      const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,
@@ -212,7 +209,7 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
       const { snapshot, onAvailableCommands, snapshotForCwd } =
         yield* makeCursorCommandCatalog(managedSnapshot);
       const adapter = yield* makeCursorAdapter(effectiveConfig, {
-        sessionEnvironment,
+        environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
         onAvailableCommands: (commands, cwd) =>

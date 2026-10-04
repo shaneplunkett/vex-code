@@ -70,7 +70,6 @@ export function browserDeviceType(identity: BrowserIdentity): AuthClientMetadata
 }
 
 export function clientPresentationMetadata(input: {
-  readonly appBaseName: string;
   readonly appVersion: string;
   readonly hosted: boolean;
   readonly identity: BrowserIdentity;
@@ -78,7 +77,7 @@ export function clientPresentationMetadata(input: {
 }): AuthClientPresentationMetadata {
   if (input.desktopBridge !== undefined) {
     return {
-      label: `${input.appBaseName} Desktop`,
+      label: "T3 Code Desktop",
       deviceType: "desktop",
       os: clientOsFromElectronPlatform(input.desktopBridge.getClientPlatform?.()),
       surface: "desktop",
@@ -87,7 +86,7 @@ export function clientPresentationMetadata(input: {
   }
 
   return {
-    label: `${input.appBaseName} Web`,
+    label: "T3 Code Web",
     deviceType: browserDeviceType(input.identity),
     os: browserClientOs(input.identity),
     surface: "web",

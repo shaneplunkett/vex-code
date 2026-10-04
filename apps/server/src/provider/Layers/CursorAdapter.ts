@@ -51,7 +51,7 @@ import {
   ProviderAdapterValidationError,
 } from "../Errors.ts";
 import { acpPermissionOutcome, mapAcpToAdapterError } from "../acp/AcpAdapterSupport.ts";
-import * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
+import type * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
@@ -77,10 +77,6 @@ import {
   extractTodosAsPlan,
 } from "../acp/CursorAcpExtension.ts";
 import { type CursorAdapterShape } from "../Services/CursorAdapter.ts";
-import {
-  resolveProviderSessionEnvironment,
-  type ProviderSessionEnvironmentOptions,
-} from "../WorkspaceEnvironment.ts";
 import { resolveCursorAcpBaseModelId } from "./CursorProvider.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
@@ -101,7 +97,8 @@ function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
-export interface CursorAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
+export interface CursorAdapterLiveOptions {
+  readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   /**
@@ -145,7 +142,6 @@ interface CursorSessionContext {
   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
   readonly turns: Array<{ id: TurnId; items: Array<unknown> }>;
-  readonly sessionEnvironment: NodeJS.ProcessEnv | undefined;
   lastPlanFingerprint: string | undefined;
   activeTurnId: TurnId | undefined;
   cursorSkillNames: ReadonlySet<string> | undefined;
@@ -513,12 +509,6 @@ export function makeCursorAdapter(
           }
 
           const cwd = path.resolve(input.cwd.trim());
-          const sessionEnvironment = yield* resolveProviderSessionEnvironment({
-            sessionEnvironment: options?.sessionEnvironment,
-            cwd,
-            provider: PROVIDER,
-            threadId: input.threadId,
-          });
           const cursorModelSelection =
             input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
           const existing = sessions.get(input.threadId);
@@ -557,10 +547,10 @@ export function makeCursorAdapter(
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
-            ...(sessionEnvironment || mcpSession?.agentDeviceEnvironment
+            ...(options?.environment || mcpSession?.agentDeviceEnvironment
               ? {
                   environment: McpProviderSession.withAgentDeviceEnvironment(
-                    sessionEnvironment ?? process.env,
+                    options?.environment ?? process.env,
                     mcpSession,
                   ),
                 }
@@ -807,7 +797,6 @@ export function makeCursorAdapter(
             pendingApprovals,
             pendingUserInputs,
             turns: [],
-            sessionEnvironment,
             lastPlanFingerprint: undefined,
             activeTurnId: undefined,
             cursorSkillNames: undefined,
@@ -1036,7 +1025,7 @@ export function makeCursorAdapter(
             if (hasCursorSkillMention(rawPrompt) && cursorSkillNames === undefined) {
               const skills = yield* discoverCursorSkills(
                 ctx.session.cwd,
-                ctx.sessionEnvironment,
+                options?.environment,
               ).pipe(
                 Effect.provideService(FileSystem.FileSystem, fileSystem),
                 Effect.provideService(Path.Path, path),

@@ -62,24 +62,6 @@ describe("buildGrokAcpSpawnInput", () => {
         XAI_API_KEY: "secret",
         GROK_OAUTH2_REFERRER: "t3code",
       },
-      extendEnv: false,
-    });
-  });
-
-  it("marks a resolved workspace environment as complete", () => {
-    const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
-      KEEP: "yes",
-    });
-
-    expect(spawn).toEqual({
-      command: "/usr/local/bin/grok",
-      args: ["agent", "stdio"],
-      cwd: "/tmp/project",
-      env: {
-        KEEP: "yes",
-        GROK_OAUTH2_REFERRER: "t3code",
-      },
-      extendEnv: false,
     });
   });
 

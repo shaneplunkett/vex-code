@@ -1905,6 +1905,7 @@ export const makeCodexSessionRuntime = (
       Effect.gen(function* () {
         const isMemoryConsolidationNotification =
           suppressMemoryConsolidationNotification(notification);
+
         const payload = notification.params;
         const route = readRouteFields(notification);
         const collabReceiverTurns = yield* Ref.get(collabReceiverTurnsRef);

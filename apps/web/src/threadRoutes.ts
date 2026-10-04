@@ -39,16 +39,6 @@ export function resolveThreadRouteRenderState(input: {
   return input.serverThreadShellExists ? "loading" : "missing";
 }
 
-export function resolveServerThreadSubscriptionRef(input: {
-  readonly routeKind: "server" | "draft";
-  readonly routeThreadRef: ScopedThreadRef;
-  readonly serverThreadShellExists: boolean;
-}): ScopedThreadRef | null {
-  return input.routeKind === "server" || input.serverThreadShellExists
-    ? input.routeThreadRef
-    : null;
-}
-
 export function buildThreadRouteParams(ref: ScopedThreadRef): {
   environmentId: EnvironmentId;
   threadId: ThreadId;

@@ -263,21 +263,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "Vex Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Vex Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
   });
 
-  it("keeps Vex desktop packaging icons across update channels", () => {
+  it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
-      macIconPng: BRAND_ASSET_PATHS.vexMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.vexLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.vexWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
     });
 
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-nightly.20260413.42"), {
-      macIconPng: BRAND_ASSET_PATHS.vexMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.vexLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.vexWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
     });
   });
 
@@ -667,7 +667,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/*.map",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "Vex Code (Alpha) 1.2.3 Installer",
+        title: "T3 Code (Alpha) 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
         contents: [
@@ -682,7 +682,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "Vex Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(linux.files, [...DESKTOP_FILE_EXCLUSIONS, ...LINUX_FILE_EXCLUSIONS]);
@@ -1530,7 +1530,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     return Effect.scoped(
       Effect.gen(function* () {
-        const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
         yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
@@ -1540,10 +1539,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isFalse(
-          commands.some(
-            (command) =>
-              command.command === path.join(fixture.packagedAppDir, fixture.appExecutableName),
-          ),
+          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
         );
         assert.isTrue(
           commands.some(
@@ -1939,30 +1935,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, [
-        { name: "Vex Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
-    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
-  );
-
-  it.effect("brands the Linux launcher while preserving compatibility identifiers", () =>
-    Effect.gen(function* () {
-      const config = yield* createBuildConfig(
-        "linux",
-        "AppImage",
-        "1.2.3",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
-
-      const linux = config.linux as Record<string, unknown>;
-      assert.equal(config.productName, "Vex Code (Alpha)");
-      assert.equal(linux.executableName, "t3code");
-      assert.deepStrictEqual(linux.desktop, {
-        entry: { Name: "Vex Code (Alpha)", StartupWMClass: "t3code" },
-      });
-      assert.equal(linux.icon, "icons");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

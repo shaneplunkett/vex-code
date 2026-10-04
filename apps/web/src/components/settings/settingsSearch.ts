@@ -378,13 +378,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["queue steer running turn send default behavior composer"],
   },
   {
-    id: "default-shell",
-    title: "Default shell",
-    to: "/settings/general",
-    searchTerms: ["terminal bash zsh fish powershell cmd command prompt"],
-    scope: "environment-defaults",
-  },
-  {
     id: "provider-update-checks",
     title: "Provider update checks",
     to: "/settings/general",

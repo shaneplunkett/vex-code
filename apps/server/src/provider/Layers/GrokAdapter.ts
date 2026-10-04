@@ -74,7 +74,6 @@ import {
 } from "../acp/XAiBackgroundTasks.ts";
 import {
   extractGrokPlanMarkdownFromToolCallData,
-  type GrokPlanPathHost,
   extractXAiAskUserQuestions,
   extractXAiExitPlanMarkdown,
   makeXAiAskUserQuestionCancelledResponse,
@@ -84,10 +83,6 @@ import {
   XAiAskUserQuestionRequest,
   XAiExitPlanModeRequest,
 } from "../acp/XAiAcpExtension.ts";
-import {
-  resolveProviderSessionEnvironment,
-  type ProviderSessionEnvironmentOptions,
-} from "../WorkspaceEnvironment.ts";
 import { type GrokAdapterShape } from "../Services/GrokAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
@@ -110,7 +105,8 @@ function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
   return Exit.isSuccess(result) ? result.value : undefined;
 }
 
-export interface GrokAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
+export interface GrokAdapterLiveOptions {
+  readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   readonly instanceId?: ProviderInstanceId;
@@ -142,7 +138,6 @@ interface GrokSessionContext {
   session: ProviderSession;
   readonly scope: Scope.Closeable;
   readonly acp: AcpSessionRuntime.AcpSessionRuntime["Service"];
-  readonly planPathHost: GrokPlanPathHost;
   notificationFiber: Fiber.Fiber<void, never> | undefined;
   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
@@ -368,6 +363,11 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
     const makeAcpNativeLoggers = yield* makeAcpNativeLoggerFactory();
     const hostPlatform = yield* HostProcessPlatform;
     const hostEnvironment = yield* HostProcessEnvironment;
+    const grokPlanPathHost = {
+      platform: hostPlatform,
+      environment: options?.environment ?? hostEnvironment,
+    };
+
     const sessions = new Map<ThreadId, GrokSessionContext>();
     const threadLocksRef = yield* SynchronizedRef.make(new Map<string, Semaphore.Semaphore>());
     const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
@@ -972,12 +972,6 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           }
 
           const cwd = path.resolve(input.cwd.trim());
-          const sessionEnvironment = yield* resolveProviderSessionEnvironment({
-            sessionEnvironment: options?.sessionEnvironment,
-            cwd,
-            provider: PROVIDER,
-            threadId: input.threadId,
-          });
           const grokModelSelection =
             input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
           const existing = sessions.get(input.threadId);
@@ -1004,10 +998,10 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeGrokAcpRuntime({
             grokSettings,
-            ...(sessionEnvironment || mcpSession?.agentDeviceEnvironment
+            ...(options?.environment || mcpSession?.agentDeviceEnvironment
               ? {
                   environment: McpProviderSession.withAgentDeviceEnvironment(
-                    sessionEnvironment ?? process.env,
+                    options?.environment ?? process.env,
                     mcpSession,
                   ),
                 }
@@ -1298,10 +1292,6 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             session,
             scope: sessionScope,
             acp,
-            planPathHost: {
-              platform: hostPlatform,
-              environment: sessionEnvironment ?? hostEnvironment,
-            },
             notificationFiber: undefined,
             pendingApprovals,
             pendingUserInputs,
@@ -1463,7 +1453,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                     if (ctx.planModeActive) {
                       const planMarkdown = extractGrokPlanMarkdownFromToolCallData(
                         event.toolCall.data,
-                        ctx.planPathHost,
+                        grokPlanPathHost,
                       );
                       if (planMarkdown !== undefined) {
                         yield* emitProposedPlanCompleted(

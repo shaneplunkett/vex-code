@@ -22,7 +22,6 @@ import {
   type ApprovalRequestId,
   type ChatFileAttachment,
   DEFAULT_MODEL,
-  type EditorId,
   type EnvironmentId,
   type MessageId,
   type ModelSelection,
@@ -120,7 +119,6 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
-import { launchTerminalEditor } from "../editorLaunch";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -242,7 +240,6 @@ import {
   GitBranchIcon,
   Minimize2Icon,
   PaperclipIcon,
-  ShieldAlertIcon,
   WifiOffIcon,
 } from "lucide-react";
 import { cn, randomHex, randomUUID } from "~/lib/utils";
@@ -348,7 +345,6 @@ import {
   primaryServerKeybindingsAtom,
   serverEnvironment,
 } from "../state/server";
-import { projectEnvironment } from "../state/projects";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import {
@@ -482,7 +478,6 @@ import {
   startNewThreadForProject,
   codexArtifactTemplatePromptToAppend,
   waitForStartedServerThread,
-  workspaceEnvironmentSendDecision,
   shouldRefocusComposerOnWindowFocus,
 } from "./ChatView.logic";
 import type { ThreadSyncPhase } from "../threadSync";
@@ -1508,13 +1503,6 @@ export default function ChatView(props: ChatViewProps) {
   const updateProjectScriptSettings = useAtomCommand(serverEnvironment.updateSettings, {
     reportFailure: false,
   });
-  const inspectWorkspaceEnvironment = useAtomCommand(
-    projectEnvironment.inspectWorkspaceEnvironment,
-    { reportFailure: false },
-  );
-  const allowWorkspaceEnvironment = useAtomCommand(projectEnvironment.allowWorkspaceEnvironment, {
-    reportFailure: false,
-  });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
@@ -1746,13 +1734,6 @@ export default function ChatView(props: ChatViewProps) {
   const isRevertingCheckpoint = useComposerDraftStore((store) =>
     store.rewindingThreadKeys.has(routeThreadKey),
   );
-  const [isAllowingWorkspaceEnvironment, setIsAllowingWorkspaceEnvironment] = useState(false);
-  const [workspaceEnvironmentActionError, setWorkspaceEnvironmentActionError] = useState<
-    string | null
-  >(null);
-  const [hasPendingWorkspaceEnvironmentSend, setHasPendingWorkspaceEnvironmentSend] =
-    useState(false);
-  const workspaceEnvironmentReadyCwdRef = useRef<string | null>(null);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -2176,21 +2157,6 @@ export default function ChatView(props: ChatViewProps) {
     [activeThread?.environmentId, activeThread?.projectId],
   );
   const activeProject = useProject(activeProjectRef);
-  const workspaceEnvironmentCwd =
-    activeThread?.worktreePath ?? activeProject?.workspaceRoot ?? null;
-  const workspaceEnvironmentStatusQuery = useEnvironmentQuery(
-    workspaceEnvironmentCwd === null
-      ? null
-      : projectEnvironment.workspaceEnvironmentStatus({
-          environmentId,
-          input: { cwd: workspaceEnvironmentCwd },
-        }),
-  );
-  useEffect(() => {
-    workspaceEnvironmentReadyCwdRef.current = null;
-    setWorkspaceEnvironmentActionError(null);
-    setHasPendingWorkspaceEnvironmentSend(false);
-  }, [workspaceEnvironmentCwd]);
   // Environment settings with the active project's overrides applied.
   const activeProjectSettings = useMemo(
     () => resolveProjectSettings(settings, activeProject?.id ?? null, activeProject ?? undefined),
@@ -4177,43 +4143,6 @@ export default function ChatView(props: ChatViewProps) {
     gitCwd,
     storeNewTerminal,
   ]);
-  const openInTerminalEditor = useCallback(
-    (editor: EditorId, cwd: string) => {
-      if (!activeThreadRef || !activeThreadId || !activeProject) return;
-      const terminalId = nextTerminalId(allocatableActiveTerminalIds);
-      storeNewTerminal(activeThreadRef, terminalId);
-      setTerminalFocusRequestId((value) => value + 1);
-
-      return launchTerminalEditor(
-        {
-          editor,
-          threadId: activeThreadId,
-          terminalId,
-          cwd,
-          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-          env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
-            worktreePath: activeThreadWorktreePath,
-          }),
-        },
-        {
-          openTerminal: (input) => openTerminal({ environmentId, input }),
-          writeTerminal: (input) => writeTerminal({ environmentId, input }),
-        },
-      );
-    },
-    [
-      activeProject,
-      activeThreadId,
-      activeThreadRef,
-      activeThreadWorktreePath,
-      allocatableActiveTerminalIds,
-      environmentId,
-      openTerminal,
-      storeNewTerminal,
-      writeTerminal,
-    ],
-  );
   const closeTerminal = useCallback(
     (terminalId: string) => {
       if (!activeThreadId || !activeThreadRef) return;
@@ -6579,7 +6508,7 @@ export default function ChatView(props: ChatViewProps) {
       }),
     [feedbackSubmissions, routeThreadKey],
   );
-  const baseComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
+  const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const backgroundLivenessItems =
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
     const resumeCompactionItems =
@@ -7771,41 +7700,6 @@ export default function ChatView(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
-    const workspaceCwd = activeThread.worktreePath ?? activeProject.workspaceRoot;
-    const workspaceSendDecision = workspaceEnvironmentSendDecision({
-      cwd: workspaceCwd,
-      readyCwd: workspaceEnvironmentReadyCwdRef.current,
-      status: workspaceEnvironmentStatusQuery.data,
-      isPending: workspaceEnvironmentStatusQuery.isPending,
-    });
-    if (workspaceSendDecision !== "ready") {
-      let workspaceStatus = workspaceEnvironmentStatusQuery.data;
-      if (workspaceSendDecision === "inspect") {
-        const inspectResult = await inspectWorkspaceEnvironment({
-          environmentId,
-          input: { cwd: workspaceCwd },
-        });
-        if (inspectResult._tag === "Failure") {
-          if (!isAtomCommandInterrupted(inspectResult)) {
-            const error = squashAtomCommandFailure(inspectResult);
-            setWorkspaceEnvironmentActionError(
-              error instanceof Error ? error.message : "Failed to inspect the workspace .envrc.",
-            );
-          }
-          return;
-        }
-        workspaceStatus = inspectResult.value;
-        setWorkspaceEnvironmentActionError(null);
-        workspaceEnvironmentStatusQuery.refresh();
-      }
-      if (workspaceStatus?._tag === "approvalRequired") {
-        setWorkspaceEnvironmentActionError(null);
-        setHasPendingWorkspaceEnvironmentSend(true);
-        workspaceEnvironmentStatusQuery.refresh();
-        return;
-      }
-      workspaceEnvironmentReadyCwdRef.current = workspaceCwd;
-    }
     const threadIdForSend = activeThread.id;
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
@@ -8686,96 +8580,6 @@ export default function ChatView(props: ChatViewProps) {
       resetLocalDispatch();
     }
   };
-
-  const onAllowWorkspaceEnvironment = async () => {
-    if (!workspaceEnvironmentCwd || isAllowingWorkspaceEnvironment) return;
-    setIsAllowingWorkspaceEnvironment(true);
-    setWorkspaceEnvironmentActionError(null);
-    const allowResult = await allowWorkspaceEnvironment({
-      environmentId,
-      input: { cwd: workspaceEnvironmentCwd },
-    });
-    setIsAllowingWorkspaceEnvironment(false);
-    if (allowResult._tag === "Failure") {
-      if (!isAtomCommandInterrupted(allowResult)) {
-        const error = squashAtomCommandFailure(allowResult);
-        setWorkspaceEnvironmentActionError(
-          error instanceof Error ? error.message : "Failed to allow the workspace .envrc.",
-        );
-      }
-      return;
-    }
-    if (allowResult.value._tag === "approvalRequired") {
-      setWorkspaceEnvironmentActionError(
-        "direnv still reports this .envrc as blocked after approval.",
-      );
-      return;
-    }
-    workspaceEnvironmentReadyCwdRef.current = workspaceEnvironmentCwd;
-    workspaceEnvironmentStatusQuery.refresh();
-    const shouldContinueSend = hasPendingWorkspaceEnvironmentSend;
-    setHasPendingWorkspaceEnvironmentSend(false);
-    if (shouldContinueSend) {
-      await onSend();
-    }
-  };
-
-  const workspaceEnvironmentLocallyReady =
-    workspaceEnvironmentReadyCwdRef.current === workspaceEnvironmentCwd;
-  const workspaceEnvironmentApproval =
-    !workspaceEnvironmentLocallyReady &&
-    workspaceEnvironmentStatusQuery.data?._tag === "approvalRequired"
-      ? workspaceEnvironmentStatusQuery.data
-      : null;
-  const workspaceEnvironmentBanner: ComposerBannerStackItem | null =
-    workspaceEnvironmentApproval || hasPendingWorkspaceEnvironmentSend
-      ? {
-          id: `workspace-environment-approval:${workspaceEnvironmentCwd ?? "unknown"}`,
-          variant: workspaceEnvironmentActionError ? "error" : "warning",
-          icon: <ShieldAlertIcon />,
-          title: "Allow this project's .envrc",
-          description:
-            workspaceEnvironmentActionError ??
-            "Vex Code needs this direnv environment before it can start the agent. Only allow it if you trust the shell code in .envrc.",
-          actions: (
-            <Button
-              size="xs"
-              disabled={isAllowingWorkspaceEnvironment}
-              onClick={() => void onAllowWorkspaceEnvironment()}
-            >
-              {isAllowingWorkspaceEnvironment
-                ? "Allowing..."
-                : hasPendingWorkspaceEnvironmentSend
-                  ? "Allow and continue"
-                  : "Allow .envrc"}
-            </Button>
-          ),
-        }
-      : !workspaceEnvironmentLocallyReady &&
-          (workspaceEnvironmentActionError || workspaceEnvironmentStatusQuery.error)
-        ? {
-            id: `workspace-environment-error:${workspaceEnvironmentCwd ?? "unknown"}`,
-            variant: "error",
-            icon: <ShieldAlertIcon />,
-            title: "Workspace environment couldn't load",
-            description: workspaceEnvironmentActionError ?? workspaceEnvironmentStatusQuery.error,
-            actions: (
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={() => {
-                  setWorkspaceEnvironmentActionError(null);
-                  workspaceEnvironmentStatusQuery.refresh();
-                }}
-              >
-                Retry
-              </Button>
-            ),
-          }
-        : null;
-  const composerBannerItems = workspaceEnvironmentBanner
-    ? [workspaceEnvironmentBanner, ...baseComposerBannerItems]
-    : baseComposerBannerItems;
 
   // Queued messages go out from QueuedMessageSender, which also covers
   // threads that are not on screen. Send now uses the same path but skips the
@@ -9969,7 +9773,6 @@ export default function ChatView(props: ChatViewProps) {
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
             onDeleteProjectScript={deleteProjectScript}
-            onOpenInTerminalEditor={openInTerminalEditor}
           />
         </WorkspacePageHeader>
 

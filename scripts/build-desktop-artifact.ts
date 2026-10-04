@@ -55,7 +55,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
-const DESKTOP_PRODUCT_BASE_NAME = desktopPackageJson.productName.replace(/\s+\([^)]*\)$/u, "");
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2581,11 +2580,19 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-export function resolveDesktopBuildIconAssets(_version: string): DesktopBuildIconAssets {
+export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  if (resolveDesktopUpdateChannel(version) === "nightly") {
+    return {
+      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+    };
+  }
+
   return {
-    macIconPng: BRAND_ASSET_PATHS.vexMacIconPng,
-    linuxIconPng: BRAND_ASSET_PATHS.vexLinuxIconPng,
-    windowsIconIco: BRAND_ASSET_PATHS.vexWindowsIconIco,
+    macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
+    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
+    windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
   };
 }
 
@@ -2608,8 +2615,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? `${DESKTOP_PRODUCT_BASE_NAME} (Nightly)`
-    : desktopPackageJson.productName;
+    ? "T3 Code (Nightly)"
+    : (desktopPackageJson.productName ?? "T3 Code");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2631,10 +2638,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   wslRuntimeBundled = false,
   arch?: typeof BuildArch.Type,
 ) {
-  const productName = resolveDesktopProductName(version);
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
-    productName,
+    productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
@@ -2690,7 +2696,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         {
-          name: DESKTOP_PRODUCT_BASE_NAME,
+          name: "T3 Code",
           schemes: ["t3code", "t3code-dev"],
         },
       ],
@@ -2744,13 +2750,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // t3code:// OAuth callbacks to the app.
       protocols: [
         {
-          name: DESKTOP_PRODUCT_BASE_NAME,
+          name: "T3 Code",
           schemes: ["t3code", "t3code-dev"],
         },
       ],
       desktop: {
         entry: {
-          Name: productName,
           StartupWMClass: "t3code",
         },
       },
@@ -3556,16 +3561,11 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
   }
   if (options.platform === "mac" && options.target === "dmg") {
-    const updateChannel = resolveDesktopUpdateChannel(appVersion);
-    const vexDmgBackground =
-      updateChannel === "nightly"
-        ? BRAND_ASSET_PATHS.vexDmgBackgroundNightlySvg
-        : BRAND_ASSET_PATHS.vexDmgBackgroundLatestSvg;
-    yield* fs.copyFile(
-      path.join(repoRoot, vexDmgBackground),
-      path.join(stageResourcesDir, "dmg", `dmg-background-${updateChannel}.svg`),
+    yield* stageDesktopDmgBackground(
+      stageResourcesDir,
+      resolveDesktopUpdateChannel(appVersion),
+      options.verbose,
     );
-    yield* stageDesktopDmgBackground(stageResourcesDir, updateChannel, options.verbose);
   }
   // On Windows the server tree ships in the server.asar sidecar instead of
   // app.asar (see stageWindowsServerSidecar), so the app stage omits it.
@@ -3669,10 +3669,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "Vex Code desktop build",
+    description: "T3 Code desktop build",
     // Required by the .deb control file.
     homepage: "https://t3.codes",
-    author: "Shane Plunkett",
+    author: "T3 Tools",
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig(
       options.platform,
@@ -3950,7 +3950,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for Vex Code."),
+  Command.withDescription("Build a desktop artifact for T3 Code."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

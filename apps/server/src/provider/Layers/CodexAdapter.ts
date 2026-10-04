@@ -58,10 +58,6 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type CodexAdapterShape } from "../Services/CodexAdapter.ts";
-import {
-  resolveProviderSessionEnvironment,
-  type ProviderSessionEnvironmentOptions,
-} from "../WorkspaceEnvironment.ts";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import {
@@ -90,10 +86,10 @@ const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
 
 import { classifyCodexManagedError } from "../CodexManagedErrors.ts";
 const PROVIDER = ProviderDriverKind.make("codex");
-const CODEX_PROTECTED_ENVIRONMENT_VARIABLES = ["CODEX_HOME"] as const;
 
-export interface CodexAdapterLiveOptions extends ProviderSessionEnvironmentOptions {
+export interface CodexAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
+  readonly environment?: NodeJS.ProcessEnv;
   /** The provider's model list; supplies model display names for runtime info. */
   readonly models?: Effect.Effect<ReadonlyArray<ServerProviderModel>>;
   readonly makeRuntime?: (
@@ -2277,14 +2273,6 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           });
         }
 
-        const cwd = input.cwd ?? process.cwd();
-        const sessionEnvironment = yield* resolveProviderSessionEnvironment({
-          sessionEnvironment: options?.sessionEnvironment,
-          cwd,
-          provider: PROVIDER,
-          threadId: input.threadId,
-          protectedVariables: CODEX_PROTECTED_ENVIRONMENT_VARIABLES,
-        });
         const existing = sessions.get(input.threadId);
         if (existing && !existing.stopped) {
           yield* Effect.suspend(() => stopSessionInternal(existing));
@@ -2309,7 +2297,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             )
           : undefined;
         const effectiveConfig = resolved?.config ?? codexConfig;
-        const effectiveEnvironment = resolved?.environment ?? sessionEnvironment;
+        const effectiveEnvironment = resolved?.environment ?? options?.environment;
         const serviceTier =
           !resolved && input.modelSelection?.instanceId === boundInstanceId
             ? getCodexServiceTierOptionValue(input.modelSelection)
@@ -2318,7 +2306,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
-          cwd,
+          cwd: input.cwd ?? process.cwd(),
           ...(options?.models ? { models: options.models } : {}),
           binaryPath: effectiveConfig.binaryPath,
           launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, effectiveEnvironment),

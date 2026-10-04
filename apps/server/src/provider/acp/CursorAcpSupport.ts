@@ -60,7 +60,7 @@ export function buildCursorAcpSpawnInput(
       "acp",
     ],
     cwd,
-    ...(environment ? { env: environment, extendEnv: false } : {}),
+    ...(environment ? { env: environment } : {}),
   };
 }
 

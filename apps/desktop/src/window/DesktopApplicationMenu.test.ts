@@ -103,7 +103,6 @@ const makeElectronMenuLayer = (
 const configureMenu = (
   selectedAction: Deferred.Deferred<string>,
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
-  input: DesktopEnvironment.MakeDesktopEnvironmentInput = environmentInput,
 ) =>
   Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
@@ -117,7 +116,7 @@ const configureMenu = (
         Layer.provideMerge(electronDialogLayer),
         Layer.provideMerge(electronAppLayer),
         Layer.provideMerge(
-          DesktopEnvironment.layer(input).pipe(
+          DesktopEnvironment.layer(environmentInput).pipe(
             Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
           ),
         ),
@@ -149,22 +148,6 @@ describe("DesktopApplicationMenu", () => {
 
       settingsClick({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
       assert.equal(yield* Deferred.await(selectedAction), "open-settings");
-    }),
-  );
-
-  it.effect("uses the Vex display name for the macOS application menu", () =>
-    Effect.gen(function* () {
-      const selectedAction = yield* Deferred.make<string>();
-      const applicationMenuTemplate =
-        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
-
-      yield* configureMenu(selectedAction, applicationMenuTemplate, {
-        ...environmentInput,
-        platform: "darwin",
-      });
-
-      const template = yield* Deferred.await(applicationMenuTemplate);
-      assert.equal(template[0]?.label, "Vex Code (Alpha)");
     }),
   );
 

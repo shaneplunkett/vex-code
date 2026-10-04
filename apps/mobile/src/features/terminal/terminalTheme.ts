@@ -4,7 +4,6 @@ import {
   themeColorToNativeColor,
   type MobileThemeId,
 } from "../../lib/mobileTheme";
-import { resolveVexMobileTerminalTheme } from "../../vex/codeTheme";
 
 export type TerminalAppearanceScheme = "light" | "dark";
 
@@ -94,7 +93,7 @@ const PIERRE_DARK_THEME: TerminalTheme = {
   ],
 };
 
-export function getPierreTerminalTheme(scheme: TerminalAppearanceScheme): TerminalTheme {
+function getPierreTerminalTheme(scheme: TerminalAppearanceScheme): TerminalTheme {
   return scheme === "light" ? PIERRE_LIGHT_THEME : PIERRE_DARK_THEME;
 }
 
@@ -102,14 +101,10 @@ export function getMobileTerminalTheme(
   themeId: MobileThemeId,
   scheme: TerminalAppearanceScheme,
 ): TerminalTheme {
-  // Material You shares the default palette, so it shares the Vex terminal theme too.
-  if (themeId === "t3-code" || themeId === "material-you") {
-    return resolveVexMobileTerminalTheme(scheme);
-  }
   const base = getPierreTerminalTheme(scheme);
-
-  const palette = getMobileThemeColors(themeId, scheme);
-  const colors = getMobileThemeVariables(themeId, scheme);
+  const paletteId = themeId === "material-you" ? "t3-code" : themeId;
+  const palette = getMobileThemeColors(paletteId, scheme);
+  const colors = getMobileThemeVariables(paletteId, scheme);
   const background = themeColorToNativeColor(palette.terminalBackground);
   return {
     ...base,
