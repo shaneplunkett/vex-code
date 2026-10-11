@@ -11,8 +11,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
-import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
-import type { ProviderAdapterV2RuntimePolicy } from "../orchestration-v2/ProviderAdapter.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
+import type { ProviderAdapterV2RuntimePolicy } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
 import * as ServerSettings from "../serverSettings.ts";

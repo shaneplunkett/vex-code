@@ -15,14 +15,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
-import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import {
   ProviderAdapterV2RuntimePolicy,
   type ProviderAdapterV2RuntimePolicy as RuntimePolicy,
-} from "../orchestration-v2/ProviderAdapter.ts";
+} from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ProviderSessionManager from "../orchestration-v2/ProviderSessionManager.ts";
-import { deriveProviderInstanceConfigMap } from "../provider/Layers/ProviderInstanceRegistryHydration.ts";
+import { deriveProviderInstanceConfigMap } from "../provider/ProviderInstanceRegistryHydration.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   WorkspaceEnvironment,

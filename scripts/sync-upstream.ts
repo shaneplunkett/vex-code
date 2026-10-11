@@ -8,8 +8,8 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import { Command, Flag } from "effect/unstable/cli";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { Command, Flag } from "effect/cli";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const EXPECTED_BRANCH = "main";
 const FORK_REMOTE = "origin";
