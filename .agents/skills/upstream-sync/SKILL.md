@@ -51,25 +51,20 @@ Find what the update breaks for Shane's machines before she does. Look hardest
 at auth scopes, pairing, provider login, persisted-state migrations, and
 anything that leaves old credentials or settings in a reduced state.
 
-Her topology:
-
-- **Servers:** `desktop` (Linux desktop app), `mini-server` (headless
-  `t3 serve`), `shanes-macbook-pro` (laptop desktop app). Each is served at
-  `https://<host>.<tailnet>.ts.net`; read the tailnet name from `tailscale status`.
-- **Clients:** desktop app, laptop app, iPhone app, and Chrome on the mini, each
-  paired to every server.
-- **SSH:** `mini` and `mbp` set `RemoteCommand fish -l`, so pass
-  `-o RemoteCommand=none -o RequestTTY=no` for one-off commands.
+Her servers and clients live in `~/.config/vex-code/pairings.json`, the config
+for `vp run repair:pairings`. `mini` and `mbp` set `RemoteCommand fish -l` in SSH
+config, so pass `-o RemoteCommand=none -o RequestTTY=no` for one-off commands.
 
 Gotchas from past syncs:
 
 - A scope change leaves every existing pairing on its old grant, so settings and
-  actions go read-only. Mint fresh links with
-  `t3 pair --base-dir ~/.t3 --label CLIENT --ttl 1h` (its defaults are the full
-  standard set), give phone links
-  as QR codes (`qrencode`), and track each client × server pair in a table.
-  Hard-refresh a browser client before pairing, since a cached bundle asks for the
-  old scopes. Afterwards, offer `t3 auth session revoke` for old-grant sessions.
+  actions go read-only. Once Shane asks, `vp run repair:pairings` mints a code
+  for every client × server pair and delivers them in one pass; `--status` then
+  shows each server's sessions. Hard-refresh a browser client before it pairs,
+  since a cached bundle asks for the old scopes. Afterwards, offer
+  `t3 auth session revoke` for old-grant sessions.
+- Pairing sessions expire 30 days after issue, however often they are used, so a
+  re-pair resets the clock for every device at once.
 - Nix hashes differ per platform, so compare builds by grepping the dist for a
   string the merge introduced, not by store path.
 - Read live state read-only (`node:sqlite` with `readOnly: true`); mint and revoke
