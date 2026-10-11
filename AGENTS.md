@@ -32,8 +32,11 @@ mobile source upstream-owned and maintain server compatibility with it.
 - Keep GitHub Actions disabled repository-wide in GitHub settings. Preserve upstream
   workflow files and helpers unchanged; do not delete them to prevent runs. Enabling
   Actions or individual workflows requires Shane's explicit request.
-- Keep `main` history stable. Merge published nightly tags with `pnpm sync:upstream`;
+- Keep `main` history stable. Merge published nightly tags with `vp run sync:upstream`;
   inspect with `--dry-run` first. Preserve real merge ancestry and all sync guards.
+  Avoid `pnpm sync:upstream`: pnpm reinstalls stale dependencies before the script runs,
+  and that install can stop to ask for confirmation, which fails without a terminal. Run
+  `vp i` after the merge, before checks.
 - The sync command stays local-first: no pushing, PR creation, or Nix updates.
 - Leave `/home/shane/nix-config` and its source/dependency pins alone unless Shane
   explicitly requests packaging work. Never switch an installed system merely to test.
