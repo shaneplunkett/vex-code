@@ -56,6 +56,11 @@ const SEAMS: ReadonlyArray<{
     why: "Pi launch env",
   },
   {
+    file: "packages/provider-muse/src/server/adapter.ts",
+    expects: ["withWorkspaceEnvironment("],
+    why: "Muse host env",
+  },
+  {
     file: "packages/provider-opencode/src/server/adapter.ts",
     expects: ["withWorkspaceEnvironment("],
     why: "OpenCode 1 server env",
