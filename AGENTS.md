@@ -24,7 +24,9 @@ adapter-side helpers in `packages/provider-core/src/server/vex/workspaceEnvironm
 so reattach any seam it reports after a sync. Use the stock upstream mobile app; keep
 mobile source upstream-owned and maintain server compatibility with it.
 
-- `origin` is `shaneplunkett/vex-code`, the only normal push target.
+- `origin` is `shane/vex-code` on Shane's Forgejo (`forgejo@forge`), the only normal push
+  target. Forgejo push-mirrors to GitHub `shaneplunkett/vex-code` (the `github` remote),
+  so never push to `github` directly. Use `fj` for forge work.
 - `upstream` is fetch-only with push URL `DISABLED`. Upstream writes require Shane's
   explicit request for that exact action.
 - Keep GitHub Actions disabled repository-wide in GitHub settings. Preserve upstream
