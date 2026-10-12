@@ -12,6 +12,7 @@ import type {
 } from "@t3tools/contracts";
 import type { ProviderChangeRequest } from "@t3tools/source-control-core/server/PullRequestProvider";
 import { dedupeChecks } from "@t3tools/source-control-core/server/pullRequestChecks";
+import { oldestStatusFirst } from "./vex/statusOrder.ts";
 
 export const ForgejoUser = Schema.Struct({
   login: Schema.String,
@@ -101,6 +102,7 @@ export const ForgejoCommit = Schema.Struct({
   ),
 });
 export const ForgejoStatus = Schema.Struct({
+  id: Schema.optional(Schema.Int),
   context: Schema.String,
   status: Schema.String,
   description: Schema.NullOr(Schema.String),
@@ -212,7 +214,7 @@ export function forgejoChecks(
   statuses: ReadonlyArray<typeof ForgejoStatus.Type>,
 ): ReadonlyArray<PullRequestCheck> {
   return dedupeChecks(
-    statuses.map((status) => ({
+    oldestStatusFirst(statuses).map((status) => ({
       workflowName: null,
       at: status.updated_at,
       check: {
