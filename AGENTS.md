@@ -16,7 +16,8 @@ GitHub Actions is disabled for this fork, so required checks run locally.
 ## Fork identity and boundaries
 
 This is Shane's personal fork of `pingdotgg/t3code`. Application code follows upstream;
-personal appearance and packaging changes live in `/home/shane/nix-config`.
+personal appearance and packaging changes live in Shane's infra monorepo,
+`~/Projects/personal/caboodle`.
 The previous branding, theme, Neovim launcher, terminal shell selector and provider skill
 patches are retired. direnv support lives in `apps/{server,web}/src/vex/workspaceEnvironment*`, with the
 adapter-side helpers in `packages/provider-core/src/server/vex/workspaceEnvironment.ts`;
@@ -33,8 +34,8 @@ mobile source upstream-owned and maintain server compatibility with it.
   workflow files and helpers unchanged; do not delete them to prevent runs. Enabling
   Actions or individual workflows requires Shane's explicit request.
 - Keep `main` history stable. Upstream syncs follow the `upstream-sync` skill: merge,
-  audit behaviour changes, check repairs, then brief Shane.
-- Leave `/home/shane/nix-config` and its source/dependency pins alone unless Shane
+  audit behaviour changes, check repairs and the Nix module, then brief Shane.
+- Leave caboodle and its source/dependency pins alone unless Shane
   explicitly requests packaging work. Never switch an installed system merely to test.
 - Keep internal compatibility identifiers, persisted keys and protocol names unchanged.
 - New fork behaviour belongs in small modules behind narrow upstream seams. The

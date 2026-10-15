@@ -52,8 +52,7 @@ at auth scopes, pairing, provider login, persisted-state migrations, and
 anything that leaves old credentials or settings in a reduced state.
 
 Her servers and clients live in `~/.config/vex-code/pairings.json`, the config
-for `vp run repair:pairings`. `mini` and `mbp` set `RemoteCommand fish -l` in SSH
-config, so pass `-o RemoteCommand=none -o RequestTTY=no` for one-off commands.
+for `vp run repair:pairings`.
 
 Gotchas from past syncs:
 
@@ -70,7 +69,32 @@ Gotchas from past syncs:
 - Read live state read-only (`node:sqlite` with `readOnly: true`); mint and revoke
   only through the `t3` CLI, and only once Shane asks.
 
-## 4. Brief Shane
+## 4. Nix module check
+
+Shane's T3 config is declared in caboodle (`~/Projects/personal/caboodle`):
+home-manager's `programs.t3code` in `home/shane/modules/common/vex-code.nix`,
+the mini's headless server in `home/shane/modules/mini-server/vex-code.nix`, and
+the package in `pkgs/vex-code/default.nix`. Every switch merges `userSettings`
+into `settings.json` and `clientSettings` into `client-settings.json` with Nix
+winning, so a key Nix sets resets on each switch and every other key stays
+UI-owned.
+
+Diff the server and client settings schemas over the merged range and sort
+every key into:
+
+- **Drift:** a key the module sets that was renamed, removed, retyped, moved
+  between `settings.json` and `client-settings.json`, or now defaults to the
+  module's value.
+- **Candidate:** a new setting Shane would want identical on every machine.
+- **Package:** a build change the merge needs (native deps, build steps,
+  toolchain versions).
+
+Secrets belong in the secret store and project ids differ per machine, so keep
+both out of the module. Done when every key the module sets is checked against
+the new schema and every new setting is sorted. Propose the edits; change
+caboodle once Shane asks.
+
+## 5. Brief Shane
 
 Brief in this order, one section at a time, and wait for her before moving on:
 
@@ -79,6 +103,7 @@ Brief in this order, one section at a time, and wait for her before moving on:
    with no setting, starting with what she'll hit first.
 3. **New features:** what each does and how to start it.
 4. **Fork impact:** seams reattached, fork features extended.
+5. **Nix module:** the drift, candidates, and package changes from step 4.
 
 Offer a fork seam for any behaviour she might want off, and build it only once she
 asks.
