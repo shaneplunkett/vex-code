@@ -42,7 +42,7 @@ mobile source upstream-owned and maintain server compatibility with it.
 
 ## What makes T3 Code special?
 
-We have over 400,000 users who love T3 Code. It's important we maintain the things they love as we continue to iterate on the product. Here's a brief list of the things we can never compromise on.
+We have over 500,000 users who love T3 Code. It's important we maintain the things they love as we continue to iterate on the product. Here's a brief list of the things we can never compromise on.
 
 ### 1. Open at the core
 
