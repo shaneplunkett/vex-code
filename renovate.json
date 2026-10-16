@@ -1,0 +1,9 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "local>shane/workflows"],
+  "description": "Upstream owns the npm dependencies, so only the shane/workflows pin and flake.lock move here.",
+  "enabledManagers": ["custom.regex", "nix"],
+  "nix": { "enabled": true, "lockFileMaintenance": { "enabled": true } },
+  "reviewers": ["metrokitten"],
+  "dependencyDashboard": false
+}

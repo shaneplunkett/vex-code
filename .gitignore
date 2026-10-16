@@ -47,3 +47,8 @@ node_modules/
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
+
+# Vex fork: Nix results and personal Claude Code settings
+result
+result-*
+.claude/settings.local.json

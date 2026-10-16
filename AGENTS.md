@@ -6,9 +6,11 @@ You can think of T3 Code as an open source "bring-your-own-subscription" alterna
 
 ## Task Completion Requirements
 
-GitHub Actions is disabled for this fork, so required checks run locally.
+GitHub Actions is disabled for this fork. `scripts/check.sh` is the gate: Forgejo CI runs it
+on pushes to `main` and on pull requests. It bans suppression comments in fork-owned code,
+checks the Nix, then runs `vp check` and `vp run typecheck`.
 
-- For code, dependency or build changes and upstream syncs, `vp check` and `vp run typecheck` must pass before considering the task completed.
+- For code, dependency or build changes and upstream syncs, `scripts/check.sh` must pass before considering the task completed.
   - If changing native mobile code, `vp run lint:mobile` must also pass.
 - Documentation-only changes need relevant formatting and diff checks, not application checks.
 - Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script.
@@ -26,8 +28,8 @@ so reattach any seam it reports after a sync. Use the stock upstream mobile app;
 mobile source upstream-owned and maintain server compatibility with it.
 
 - `origin` is `shane/vex-code` on Shane's Forgejo (`forgejo@forge`), the only normal push
-  target. Forgejo push-mirrors to GitHub `shaneplunkett/vex-code` (the `github` remote),
-  so never push to `github` directly. Use `fj` for forge work.
+  target. Forgejo push-mirrors to GitHub `shaneplunkett/vex-code`, so there is no GitHub
+  remote and nothing pushes to GitHub directly. Use `fj` for forge work.
 - `upstream` is fetch-only with push URL `DISABLED`. Upstream writes require Shane's
   explicit request for that exact action.
 - Keep GitHub Actions disabled repository-wide in GitHub settings. Preserve upstream
@@ -40,6 +42,7 @@ mobile source upstream-owned and maintain server compatibility with it.
 - Keep internal compatibility identifiers, persisted keys and protocol names unchanged.
 - New fork behaviour belongs in small modules behind narrow upstream seams. The
   dropped-Vex-seam guard applies to live customisations, not intentionally retired ones.
+- Tickets live in the Linear project `vex-code`, in the Engineering team.
 
 ## What makes T3 Code special?
 

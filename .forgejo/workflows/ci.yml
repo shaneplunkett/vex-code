@@ -1,0 +1,14 @@
+# Runs the gate. The shared check.yml can't, because the gate needs
+# node_modules installed first.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: nix
+    steps:
+      - uses: https://git.shaneplunkett.com/shane/workflows/checkout@v1.4.0
+      - run: nix --option warn-dirty false develop --command vp i
+      - run: nix --option warn-dirty false develop --command scripts/check.sh
