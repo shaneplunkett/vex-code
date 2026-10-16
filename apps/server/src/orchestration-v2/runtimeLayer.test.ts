@@ -2673,6 +2673,113 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       }),
   );
 
+  it.effect(
+    "without a host fingerprint, a check change on the same head wakes the watch next pass",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const projectId = ProjectId.make("pr-watch-same-head-project");
+        const threadId = ThreadId.make("runtime-pull-request-watch-same-head");
+        const key = { host: "forge.test", repository: "acme/web", number: 12 };
+        yield* seedProject({
+          projectId,
+          title: "Watch same head",
+          workspaceRoot: "/workspace/watch-same-head",
+          defaultModelSelection: null,
+          createdAt: "2026-10-01T00:00:00.000Z",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          createdBy: "user",
+          creationSource: "web",
+          commandId: CommandId.make("pr-watch-same-head-create"),
+          threadId,
+          projectId,
+          title: "Watch same head",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.pull-request.watch",
+          commandId: CommandId.make("pr-watch-same-head-start"),
+          threadId,
+          ...key,
+          watching: true,
+          link: { url: "https://forge.test/acme/web/pulls/12", source: "agent" },
+        });
+        // What pull request sync records each minute; a forge summary carries its check state.
+        const sync = (checksState: "passing" | "failing") =>
+          orchestrator.dispatch({
+            type: "thread.pull-request-link.sync",
+            commandId: CommandId.make(`pr-watch-same-head-sync-${checksState}`),
+            threadId,
+            ...key,
+            snapshot: {
+              state: "open",
+              title: "Watched pull request",
+              headBranch: "feature",
+              baseBranch: "main",
+              isDraft: false,
+              updatedAt: "2026-10-02T12:00:00.000Z",
+              syncedAt: "2026-10-02T12:00:00.000Z",
+              checksState,
+            },
+            stack: null,
+          });
+        yield* sync("passing");
+
+        let lint: "success" | "failure" = "success";
+        let reads = 0;
+        const reactor = yield* PullRequestWatchReactor.make.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              NodeServices.layer,
+              Layer.mock(PullRequestService.PullRequestService)({
+                detail: () =>
+                  Effect.sync(() => {
+                    reads += 1;
+                    return {
+                      ...watchedPullRequestDetail({
+                        projectId,
+                        number: 12,
+                        at: "2026-10-02T12:00:00.000Z",
+                      }),
+                      checks: [{ name: "lint", status: lint, description: null, url: null }],
+                    };
+                  }),
+                activity: () =>
+                  Effect.succeed({
+                    comments: [],
+                    commentCount: 0,
+                    commentsTruncated: false,
+                    reviewThreads: [],
+                    commits: [],
+                  }),
+              }),
+            ),
+          ),
+        );
+        const summaries = Effect.map(
+          orchestrator.getThreadRecords(threadId, ["messages"]),
+          ({ messages }) => messages.flatMap((message) => message.notification?.summary ?? []),
+        );
+
+        yield* reactor.sweep;
+        assert.equal(reads, 1);
+        assert.deepEqual(yield* summaries, ["#12: checks passed"]);
+
+        // A check fails without a push, so updatedAt holds, but the synced check state moves.
+        lint = "failure";
+        yield* sync("failing");
+        yield* reactor.sweep;
+        assert.equal(reads, 2);
+        assert.sameMembers(yield* summaries, ["#12: checks passed", "#12: checks failed"]);
+      }),
+  );
+
   it.effect("reports how long an ended watch was quiet", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
