@@ -513,13 +513,21 @@ export const make = Effect.gen(function* () {
     }),
     listReviewerCandidates: Effect.fn("ForgejoPullRequestProvider.listReviewerCandidates")(
       function* (input) {
+        // The assignees endpoint ignores paging and returns every user on each page, so read it once.
         const [pr, users] = yield* Effect.all(
-          [getPull(input), page({ ...input, path: `${repoPath(input)}/assignees` }, ForgejoUser)],
+          [
+            getPull(input),
+            readArray({ ...input, path: `${repoPath(input)}/assignees` }, ForgejoUser),
+          ],
           { concurrency: 2 },
         );
         return {
-          candidates: users.items
-            .filter((user) => user.login !== pr.user?.login)
+          candidates: users
+            .filter(
+              (user, index) =>
+                user.login !== pr.user?.login &&
+                users.findIndex((other) => other.login === user.login) === index,
+            )
             .flatMap((user) => {
               const actor = forgejoActor(user);
               return actor
@@ -535,7 +543,7 @@ export const make = Effect.gen(function* () {
                   ]
                 : [];
             }),
-          truncated: users.truncated,
+          truncated: false,
         };
       },
     ),
