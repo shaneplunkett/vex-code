@@ -37,6 +37,7 @@ import {
 import { definition } from "../client/definition.ts";
 import { absoluteCheckUrls, checksState, reviewDecision } from "./vex/summaryStatus.ts";
 import { draftTitle, readyTitle } from "./vex/draftTitle.ts";
+import { watchFingerprint } from "./vex/watchFingerprint.ts";
 
 const CAPABILITIES: PullRequestCapabilities = {
   diff: true,
@@ -305,6 +306,19 @@ export const make = Effect.gen(function* () {
         };
       },
     ),
+    getChangeRequestWatchFingerprint: Effect.fn(
+      "ForgejoPullRequestProvider.getChangeRequestWatchFingerprint",
+    )(function* (input) {
+      const pr = yield* getPull(input);
+      const [checks, reviews] = yield* Effect.all(
+        [
+          readChecks(input, pr),
+          page({ ...input, path: `${pullPath(input)}/reviews` }, ForgejoReview),
+        ],
+        { concurrency: 2 },
+      );
+      return watchFingerprint(pr, checks, reviews.items);
+    }),
     getChangeRequestChecks: Effect.fn("ForgejoPullRequestProvider.getChangeRequestChecks")(
       function* (input) {
         const pr = yield* getPull(input);
