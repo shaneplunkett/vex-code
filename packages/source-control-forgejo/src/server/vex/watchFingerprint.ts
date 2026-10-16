@@ -21,9 +21,8 @@ interface FingerprintReview {
 /**
  * What a forge pull request watch compares between passes, built from the pull request, its
  * head's checks and its reviews. Each check keeps its own state, so a second check failing
- * moves `status` even while the rollup stays failing. `remarks` also carries `updated_at`, so
- * anything else that touches the pull request reads its activity too; an edit Forgejo does not
- * stamp there waits for the watch's periodic reread.
+ * moves `status` even while the rollup stays failing. `remarks` also carries `updated_at`, which
+ * a new comment bumps and an edited one does not, so edits wait for the watch's periodic reread.
  */
 export const watchFingerprint = (
   pr: FingerprintPull,
