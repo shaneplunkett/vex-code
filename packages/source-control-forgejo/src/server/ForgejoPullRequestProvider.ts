@@ -34,6 +34,7 @@ import {
   forgejoReactions,
 } from "./forgejoPullRequestJson.ts";
 import { definition } from "../client/definition.ts";
+import { absoluteCheckUrls, checksState, reviewDecision } from "./vex/summaryStatus.ts";
 
 const CAPABILITIES: PullRequestCapabilities = {
   diff: true,
@@ -159,6 +160,21 @@ export const make = Effect.gen(function* () {
       },
       ForgejoPullRequest,
     );
+  const readChecks = (input: ProviderRepositoryRef, pr: typeof ForgejoPullRequest.Type) =>
+    page(
+      {
+        ...input,
+        path: `${repoPath(input)}/statuses/${encodeURIComponent(pr.head.sha)}?sort=recentupdate`,
+      },
+      ForgejoStatus,
+    ).pipe(Effect.map((statuses) => absoluteCheckUrls(forgejoChecks(statuses.items), pr.html_url)));
+  const readReviewDecision = (
+    input: ProviderRepositoryRef & { readonly number: number },
+    pr: typeof ForgejoPullRequest.Type,
+  ) =>
+    page({ ...input, path: `${pullPath(input)}/reviews` }, ForgejoReview).pipe(
+      Effect.map((reviews) => reviewDecision(reviews.items, pr.requested_reviewers?.length ?? 0)),
+    );
   const getRepo = (input: ProviderRepositoryRef) =>
     read({ ...input, path: repoPath(input) }, ForgejoRepository);
   const getViewer = (input: {
@@ -240,18 +256,26 @@ export const make = Effect.gen(function* () {
         return { items, truncated: more, continues: true, cursorAdvance: consumed };
       },
     ),
-    getChangeRequestSummary: (input) => getPull(input).pipe(Effect.map(forgejoChangeRequest)),
+    getChangeRequestSummary: Effect.fn("ForgejoPullRequestProvider.getChangeRequestSummary")(
+      function* (input) {
+        const pr = yield* getPull(input);
+        const [checks, decision] = yield* Effect.all(
+          [readChecks(input, pr), readReviewDecision(input, pr)],
+          { concurrency: 2 },
+        );
+        return {
+          ...forgejoChangeRequest(pr),
+          changedFiles: pr.changed_files ?? undefined,
+          checksState: checksState(checks),
+          reviewDecision: decision,
+        };
+      },
+    ),
     getChangeRequestChecks: Effect.fn("ForgejoPullRequestProvider.getChangeRequestChecks")(
       function* (input) {
         const pr = yield* getPull(input);
-        const statuses = yield* page(
-          {
-            ...input,
-            path: `${repoPath(input)}/statuses/${encodeURIComponent(pr.head.sha)}?sort=recentupdate`,
-          },
-          ForgejoStatus,
-        );
-        return { state: forgejoChangeRequest(pr).state, checks: forgejoChecks(statuses.items) };
+        const checks = yield* readChecks(input, pr);
+        return { state: forgejoChangeRequest(pr).state, checks };
       },
     ),
     getChangeRequest: Effect.fn("ForgejoPullRequestProvider.getChangeRequest")(function* (input) {
@@ -259,15 +283,14 @@ export const make = Effect.gen(function* () {
         [getPull(input), getRepo(input), getViewer(input)],
         { concurrency: 3 },
       );
-      const statuses = yield* page(
-        {
-          ...input,
-          path: `${repoPath(input)}/statuses/${encodeURIComponent(pr.head.sha)}?sort=recentupdate`,
-        },
-        ForgejoStatus,
+      const [checks, decision] = yield* Effect.all(
+        [readChecks(input, pr), readReviewDecision(input, pr)],
+        { concurrency: 2 },
       );
       return {
         ...forgejoChangeRequest(pr),
+        checksState: checksState(checks),
+        reviewDecision: decision,
         headSha: pr.head.sha,
         body: pr.body ?? "",
         changedFiles: pr.changed_files ?? 0,
@@ -275,7 +298,7 @@ export const make = Effect.gen(function* () {
           const actor = forgejoActor(user);
           return actor ? [actor] : [];
         }),
-        checks: forgejoChecks(statuses.items),
+        checks,
         baseComparison: !pr.merge_base
           ? "unknown"
           : pr.merge_base === pr.base.sha

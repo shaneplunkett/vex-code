@@ -77,6 +77,7 @@ export const ForgejoReview = Schema.Struct({
   body: Schema.String,
   user: Schema.NullOr(ForgejoUser),
   state: Schema.String,
+  dismissed: Schema.optional(Schema.Boolean),
   submitted_at: Schema.String,
   html_url: Schema.optional(Schema.String),
   comments_count: Schema.Int,

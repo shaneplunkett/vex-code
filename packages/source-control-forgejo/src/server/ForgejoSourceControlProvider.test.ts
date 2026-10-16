@@ -234,6 +234,7 @@ it.effect.each([
                 response = pr.user;
                 break;
               case "repos/maria/project/statuses/head":
+              case "repos/maria/project/pulls/42/reviews":
                 response = [];
                 break;
               default:
