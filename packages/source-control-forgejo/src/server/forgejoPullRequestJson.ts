@@ -64,6 +64,8 @@ export const ForgejoPullRequest = Schema.Struct({
   labels: Schema.NullOr(Schema.Array(ForgejoLabel)),
   requested_reviewers: Schema.optional(Schema.NullOr(Schema.Array(ForgejoUser))),
 });
+/** An issues-search row, which for a pull request names it and little else that is useful. */
+export const ForgejoIssueRef = Schema.Struct({ number: Schema.Int });
 export const ForgejoComment = Schema.Struct({
   id: Schema.Int,
   body: Schema.String,

@@ -13,6 +13,7 @@ import {
   type PullRequestProviderApi,
 } from "@t3tools/source-control-core/server/PullRequestProvider";
 import {
+  ForgejoIssueRef,
   ForgejoPullRequest,
   ForgejoRepository,
   ForgejoUser,
@@ -35,6 +36,7 @@ import {
 } from "./forgejoPullRequestJson.ts";
 import { definition } from "../client/definition.ts";
 import { absoluteCheckUrls, checksState, reviewDecision } from "./vex/summaryStatus.ts";
+import { draftTitle, readyTitle } from "./vex/draftTitle.ts";
 
 const CAPABILITIES: PullRequestCapabilities = {
   diff: true,
@@ -43,10 +45,10 @@ const CAPABILITIES: PullRequestCapabilities = {
   actions: [...definition.changeRequestActions],
   mergeMethods: ["merge", "squash", "rebase"],
   updateMethods: ["merge", "rebase"],
-  search: false,
+  search: true,
   reactions: true,
   labels: true,
-  // Forgejo's public API has no thread replies/resolution or draft conversion endpoint.
+  // Forgejo's public API has no thread replies/resolution endpoint.
   review: {
     inlineComment: true,
     reply: false,
@@ -149,6 +151,33 @@ export const make = Effect.gen(function* () {
     }
     return { items, truncated: true };
   });
+  // Self-hosted servers may cap pages below 50. Establish their actual page size before
+  // translating the service's row offset into an API page number.
+  const readSlice = Effect.fn("ForgejoPullRequestProvider.readSlice")(function* <A>(
+    query: ForgejoCli.ForgejoApiInput,
+    schema: Schema.Codec<A, unknown, never, never>,
+    offset: number,
+    limit: number,
+  ) {
+    const rows: A[] = [];
+    const first = yield* readPage(query, Schema.NullOr(schema), 1);
+    const pageSize = first.rows.length || 50;
+    const firstIndex = Math.floor(offset / pageSize) + 1;
+    let consumed = 0;
+    let more = true;
+    for (let index = firstIndex; more && consumed < limit; index++) {
+      const result = index === 1 ? first : yield* readPage(query, Schema.NullOr(schema), index);
+      const start = index === firstIndex ? offset % pageSize : 0;
+      const countBefore = consumed;
+      for (const row of result.rows.slice(start)) {
+        if (consumed >= limit) break;
+        consumed++;
+        if (row) rows.push(row);
+      }
+      more = result.more || result.rows.length - start > consumed - countBefore;
+    }
+    return { rows, more, consumed };
+  });
   const write = (input: ForgejoCli.ForgejoApiInput) => request(input).pipe(Effect.asVoid);
   const getPull = (input: ProviderRepositoryRef & { readonly number: number }) =>
     read(
@@ -227,33 +256,38 @@ export const make = Effect.gen(function* () {
     listChangeRequests: Effect.fn("ForgejoPullRequestProvider.listChangeRequests")(
       function* (input) {
         const offset = input.cursor?.delivered ?? 0;
-        const items: ReturnType<typeof forgejoChangeRequest>[] = [];
         const state = input.state === "merged" ? "closed" : input.state;
-        const query = {
-          ...input,
-          path: `${repoPath(input)}/pulls?state=${state}&sort=recentupdate`,
+        const search = input.query?.trim();
+        // The pulls listing has no text filter. The issues search has one and names the
+        // matching pull requests, which are then read in full.
+        const found = search
+          ? yield* readSlice(
+              {
+                ...input,
+                path: `${repoPath(input)}/issues?type=pulls&state=${state}&q=${encodeURIComponent(search)}`,
+              },
+              ForgejoIssueRef,
+              offset,
+              input.limit,
+            ).pipe(
+              Effect.flatMap(({ rows, ...slice }) =>
+                Effect.forEach(rows, (row) => getPull({ ...input, number: row.number }), {
+                  concurrency: 4,
+                }).pipe(Effect.map((pulls) => ({ ...slice, rows: pulls }))),
+              ),
+            )
+          : yield* readSlice(
+              { ...input, path: `${repoPath(input)}/pulls?state=${state}&sort=recentupdate` },
+              ForgejoPullRequest,
+              offset,
+              input.limit,
+            );
+        return {
+          items: found.rows.map(forgejoChangeRequest),
+          truncated: found.more,
+          continues: true,
+          cursorAdvance: found.consumed,
         };
-        // Self-hosted servers may cap pages below 50. Establish their actual page size before
-        // translating the service's row offset into an API page number.
-        const first = yield* readPage(query, Schema.NullOr(ForgejoPullRequest), 1);
-        const pageSize = first.rows.length || 50;
-        const firstIndex = Math.floor(offset / pageSize) + 1;
-        let consumed = 0;
-        let more = true;
-        for (let index = firstIndex; more && consumed < input.limit; index++) {
-          const result =
-            index === 1 ? first : yield* readPage(query, Schema.NullOr(ForgejoPullRequest), index);
-          const rows = result.rows;
-          const start = index === firstIndex ? offset % pageSize : 0;
-          const countBefore = consumed;
-          for (const row of rows.slice(start)) {
-            if (consumed >= input.limit) break;
-            consumed++;
-            if (row) items.push(forgejoChangeRequest(row));
-          }
-          more = result.more || rows.length - start > consumed - countBefore;
-        }
-        return { items, truncated: more, continues: true, cursorAdvance: consumed };
       },
     ),
     getChangeRequestSummary: Effect.fn("ForgejoPullRequestProvider.getChangeRequestSummary")(
@@ -470,6 +504,18 @@ export const make = Effect.gen(function* () {
             method: "PATCH",
             body: { state: input.action === "close" ? "closed" : "open" },
           });
+        case "draft":
+        case "ready":
+          return getPull(input).pipe(
+            Effect.flatMap((pr) =>
+              write({
+                ...input,
+                path: pullPath(input),
+                method: "PATCH",
+                body: { title: (input.action === "draft" ? draftTitle : readyTitle)(pr.title) },
+              }),
+            ),
+          );
         case "update-branch":
           return write({
             ...input,
