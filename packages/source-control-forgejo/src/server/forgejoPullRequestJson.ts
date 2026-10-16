@@ -69,6 +69,7 @@ export const ForgejoComment = Schema.Struct({
   body: Schema.String,
   user: Schema.NullOr(ForgejoUser),
   created_at: Schema.String,
+  updated_at: Schema.optional(Schema.String),
   html_url: Schema.optional(Schema.String),
 });
 export const ForgejoReview = Schema.Struct({
@@ -157,6 +158,11 @@ export function forgejoComment(comment: typeof ForgejoComment.Type): PullRequest
     author: forgejoActor(comment.user),
     body: comment.body,
     createdAt: toIsoUtc(comment.created_at),
+    // Forgejo stamps updated_at on creation too, so only a later time means an edit.
+    editedAt:
+      comment.updated_at && Date.parse(comment.updated_at) > Date.parse(comment.created_at)
+        ? toIsoUtc(comment.updated_at)
+        : null,
     url: comment.html_url || null,
     path: null,
     reviewState: null,
