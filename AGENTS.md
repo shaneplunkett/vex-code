@@ -42,7 +42,7 @@ mobile source upstream-owned and maintain server compatibility with it.
 - Keep internal compatibility identifiers, persisted keys and protocol names unchanged.
 - New fork behaviour belongs in small modules behind narrow upstream seams. The
   dropped-Vex-seam guard applies to live customisations, not intentionally retired ones.
-- Tickets live in the Linear project `vex-code`, in the Engineering team.
+- Tickets carry the Linear label `repo:vex-code`, in the Engineering team.
 
 ## What makes T3 Code special?
 
