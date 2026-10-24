@@ -39,7 +39,7 @@ it.effect("carries Forgejo comment edits into editedAt", () =>
       activity.comments.map((comment) => [comment.id, comment.editedAt]),
     );
     assert.strictEqual(editedAt["10"], "2026-10-16T01:00:00.000Z");
-    assert.isNull(editedAt["11"]);
+    assert.isUndefined(editedAt["11"]);
     assert.strictEqual(editedAt["20"], "2026-10-16T02:00:00.000Z");
     assert.strictEqual(
       activity.reviewThreads[0]?.comments[0]?.editedAt,

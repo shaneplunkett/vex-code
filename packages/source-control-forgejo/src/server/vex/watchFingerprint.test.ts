@@ -35,27 +35,29 @@ const forge = (host: Host) =>
                 merged_at: null,
                 labels: [],
               })
-            : !input.path.includes("page=1")
-              ? "[]"
-              : input.path.includes("/statuses/")
-                ? JSON.stringify(
-                    Object.entries(host.checks).map(([context, status], index) => ({
-                      id: index + 1,
-                      context,
-                      status,
-                      description: null,
-                      target_url: null,
-                      updated_at: "2026-10-16T00:00:00Z",
-                    })),
-                  )
-                : JSON.stringify(
-                    host.reviews.map((review) => ({
-                      ...review,
-                      body: "",
-                      user: { login: "vex" },
-                      submitted_at: "2026-10-16T00:00:00Z",
-                    })),
-                  ),
+            : input.path === "repos/acme/web/branches/main"
+              ? "{}"
+              : !input.path.includes("page=1")
+                ? "[]"
+                : input.path.includes("/statuses/")
+                  ? JSON.stringify(
+                      Object.entries(host.checks).map(([context, status], index) => ({
+                        id: index + 1,
+                        context,
+                        status,
+                        description: null,
+                        target_url: null,
+                        updated_at: "2026-10-16T00:00:00Z",
+                      })),
+                    )
+                  : JSON.stringify(
+                      host.reviews.map((review) => ({
+                        ...review,
+                        body: "",
+                        user: { login: "vex" },
+                        submitted_at: "2026-10-16T00:00:00Z",
+                      })),
+                    ),
         ),
       ),
   });

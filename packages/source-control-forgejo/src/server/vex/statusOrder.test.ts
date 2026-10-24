@@ -22,7 +22,7 @@ it("settles a same-second status change on the newer row", () => {
     row(3, "pending", "2026-10-12T01:46:22Z"),
   ]);
   assert.deepStrictEqual(
-    forgejoChecks(statuses).map((check) => check.status),
+    forgejoChecks(statuses, "https://forge.test/acme/web/pulls/1").map((check) => check.status),
     ["success"],
   );
 });

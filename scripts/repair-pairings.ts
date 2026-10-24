@@ -31,7 +31,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { QrCode } from "@t3tools/shared/qrCode";
-import { parseTailscaleMagicDnsName } from "@t3tools/tailscale";
+import { parseTailscaleStatus } from "@t3tools/tailscale";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -255,7 +255,8 @@ const repairPairings = Effect.fn("repairPairings")(function* (input: {
   if (input.status) return yield* showStatus(config);
 
   const suffix = yield* run("tailscale", ["status", "--json"]).pipe(
-    Effect.flatMap(parseTailscaleMagicDnsName),
+    Effect.flatMap(parseTailscaleStatus),
+    Effect.map((status) => status.magicDnsName),
     Effect.mapError(
       (cause) => new RepairPairingsError({ step: "tailscale", detail: String(cause) }),
     ),

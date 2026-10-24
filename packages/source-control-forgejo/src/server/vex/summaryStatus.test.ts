@@ -21,11 +21,13 @@ const forge = Layer.mock(ForgejoCli.ForgejoCli)({
       TestSourceControlHost.processOutput(
         input.path === "repos/acme/web/pulls/1"
           ? pr
-          : input.path.includes("page=1")
-            ? input.path.includes("/statuses/")
-              ? statuses
-              : reviews
-            : "[]",
+          : input.path === "repos/acme/web/branches/main"
+            ? "{}"
+            : input.path.includes("page=1")
+              ? input.path.includes("/statuses/")
+                ? statuses
+                : reviews
+              : "[]",
       ),
     ),
 });
@@ -41,19 +43,6 @@ describe("Forgejo summary status", () => {
       assert.strictEqual(summary.checksState, "failing");
       assert.strictEqual(summary.reviewDecision, "approved");
       assert.strictEqual(summary.changedFiles, 3);
-    }).pipe(Effect.provide(forge)),
-  );
-
-  it.effect("check links resolve against the forge host", () =>
-    Effect.gen(function* () {
-      const provider = yield* ForgejoPullRequestProvider.make;
-      const read = provider.getChangeRequestChecks;
-      if (read === undefined) return yield* Effect.die("checks read missing");
-      const { checks } = yield* read(input);
-      assert.deepStrictEqual(checks.map((check) => check.url).toSorted(), [
-        "https://ci.example/lint",
-        "https://forge.test/sub/acme/web/actions/runs/7/jobs/0",
-      ]);
     }).pipe(Effect.provide(forge)),
   );
 

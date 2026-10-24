@@ -4,20 +4,6 @@ import type {
   PullRequestReviewDecision,
 } from "@t3tools/contracts";
 
-/**
- * Makes Forgejo check links absolute. Forgejo Actions reports root-relative links that already
- * include any sub-path, so resolving them against the pull request's own page gives the full URL.
- */
-export const absoluteCheckUrls = (
-  checks: ReadonlyArray<PullRequestCheck>,
-  pageUrl: string,
-): ReadonlyArray<PullRequestCheck> =>
-  checks.map((check) =>
-    check.url !== null && URL.canParse(check.url, pageUrl)
-      ? { ...check, url: new URL(check.url, pageUrl).href }
-      : check,
-  );
-
 /** The one-word verdict over a pull request's checks, or null when it has none that count. */
 export const checksState = (
   checks: ReadonlyArray<PullRequestCheck>,

@@ -8,7 +8,7 @@ import {
   type WorkspaceEnvironmentStatus,
 } from "@t3tools/contracts";
 import { ShieldAlertIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ComposerBannerStackItem } from "../components/chat/ComposerBannerStack";
 import { useSettingsScope } from "../components/settings/SettingsScopeContext";
@@ -44,23 +44,20 @@ function useWorkspaceEnvironment(environmentId: EnvironmentId | null, cwd: strin
   const revoke = useAtomCommand(revokeWorkspaceEnvironment);
   const [isPending, setIsPending] = useState(false);
   const { refresh } = query;
-  const run = useCallback(
-    (command: typeof allow) => {
-      if (environmentId === null || cwd === null) return;
-      setIsPending(true);
-      void command({ environmentId, input: { cwd } }).finally(() => {
-        setIsPending(false);
-        refresh();
-      });
-    },
-    [cwd, environmentId, refresh],
-  );
+  const run = (command: typeof allow) => {
+    if (environmentId === null || cwd === null) return;
+    setIsPending(true);
+    void command({ environmentId, input: { cwd } }).finally(() => {
+      setIsPending(false);
+      refresh();
+    });
+  };
   return {
     status: query.data,
     refresh,
     isPending,
-    allow: useCallback(() => run(allow), [allow, run]),
-    revoke: useCallback(() => run(revoke), [revoke, run]),
+    allow: () => run(allow),
+    revoke: () => run(revoke),
   };
 }
 
@@ -97,33 +94,30 @@ export function useWorkspaceEnvironmentBannerItem(input: {
     refresh();
   }, [refresh, refreshKey]);
   const { status, isPending, allow } = environment;
-  return useMemo(() => {
-    if (status === null) return null;
-    const title = problemTitle(status);
-    if (title === null || status._tag === "inactive" || status._tag === "ready") return null;
-    return {
-      id: `workspace-environment:${status.envrcPath}`,
-      variant: "warning",
-      compact: true,
-      icon: <ShieldAlertIcon />,
-      title,
-      description:
-        status._tag === "failed"
-          ? status.detail
-          : status._tag === "blocked"
-            ? `Turns start without ${status.envrcPath} until you allow it.`
-            : status.envrcPath,
-      ...(status._tag === "blocked"
-        ? {
-            actions: (
-              <Button size="xs" variant="outline" disabled={isPending} onClick={allow}>
-                Allow
-              </Button>
-            ),
-          }
-        : {}),
-    };
-  }, [allow, isPending, status]);
+  if (status === null) return null;
+  const title = problemTitle(status);
+  if (title === null || status._tag === "inactive" || status._tag === "ready") return null;
+  return {
+    id: `workspace-environment:${status.envrcPath}`,
+    variant: "warning",
+    icon: <ShieldAlertIcon />,
+    title,
+    description:
+      status._tag === "failed"
+        ? status.detail
+        : status._tag === "blocked"
+          ? `Turns start without ${status.envrcPath} until you allow it.`
+          : status.envrcPath,
+    ...(status._tag === "blocked"
+      ? {
+          actions: (
+            <Button size="xs" variant="outline" disabled={isPending} onClick={allow}>
+              Allow
+            </Button>
+          ),
+        }
+      : {}),
+  };
 }
 
 function WorkspaceEnvironmentRow(props: {
