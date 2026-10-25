@@ -9,6 +9,6 @@ jobs:
   check:
     runs-on: nix
     steps:
-      - uses: https://git.shaneplunkett.com/shane/workflows/checkout@v1.5.0
+      - uses: https://git.shaneplunkett.com/shane/workflows/checkout@v1.6.0
       - run: nix --option warn-dirty false develop --command vp i
       - run: nix --option warn-dirty false develop --command scripts/check.sh
