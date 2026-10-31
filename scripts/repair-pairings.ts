@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Re-pairs every client with every T3 server on Shane's tailnet in one pass, reading
- * `~/.config/vex-code/pairings.json` (shaped by `PairingConfig` below).
+ * Re-pairs every client with every T3 server on Shane's tailnet in one pass, or with `--links`
+ * relinks every server to every other, reading `~/.config/vex-code/pairings.json`.
  */
 
 import * as NodeOS from "node:os";
@@ -46,6 +46,7 @@ const PairingConfig = Schema.Struct({
 type PairingConfig = typeof PairingConfig.Type;
 
 const MintedPairing = Schema.Struct({ pairUrl: Schema.String, expiresAt: Schema.String });
+const MintedCode = Schema.Struct({ credential: Schema.String });
 
 const SessionList = Schema.Array(
   Schema.Struct({
@@ -55,6 +56,10 @@ const SessionList = Schema.Array(
     expiresAt: Schema.String,
     connected: Schema.Boolean,
   }),
+);
+
+const LinkList = Schema.Array(
+  Schema.Struct({ label: Schema.String, expiresAt: Schema.String, status: Schema.String }),
 );
 
 export class RepairPairingsError extends Schema.TaggedError<RepairPairingsError>()(
@@ -77,6 +82,18 @@ export function planPairings(config: PairingConfig): ReadonlyArray<PlannedPairin
     config.servers
       .filter((server) => server.name !== client.ownServer)
       .map((server) => ({ client, server })),
+  );
+}
+
+export interface PlannedLink {
+  readonly from: PairingServer;
+  readonly to: PairingServer;
+}
+
+/** Every ordered pair of servers, since a link only lets the first reach the second. */
+export function planLinks(config: PairingConfig): ReadonlyArray<PlannedLink> {
+  return config.servers.flatMap((from) =>
+    config.servers.filter((to) => to.name !== from.name).map((to) => ({ from, to })),
   );
 }
 
@@ -138,6 +155,7 @@ const runOn = (server: PairingServer, args: ReadonlyArray<string>) =>
   server.ssh === undefined
     ? run(args[0]!, args.slice(1))
     : run("ssh", [
+        "-n",
         "-o",
         "BatchMode=yes",
         "-o",
@@ -197,6 +215,67 @@ const showStatus = Effect.fn("showStatus")(function* (config: PairingConfig) {
         `  ${(session.client.label ?? "(unlabelled)").padEnd(18)} expires ${session.expiresAt.slice(0, 10)}  ${session.scopes.length} scopes${session.connected ? "  connected" : ""}`,
       );
     }
+    const links = yield* runOn(server, ["t3", "environment", "list", "--json"]).pipe(
+      Effect.flatMap(decodeJson(LinkList, `${server.name} links`)),
+    );
+    for (const link of links) {
+      yield* Console.log(
+        `  link → ${link.label.padEnd(18)} expires ${link.expiresAt.slice(0, 10)}  ${link.status}`,
+      );
+    }
+  }
+});
+
+const tailnetSuffixHere = run("tailscale", ["status", "--json"]).pipe(
+  Effect.flatMap(parseTailscaleStatus),
+  Effect.map((status) => status.magicDnsName),
+  Effect.mapError((cause) => new RepairPairingsError({ step: "tailscale", detail: String(cause) })),
+  Effect.flatMap((name) =>
+    name === null
+      ? new RepairPairingsError({ step: "tailscale", detail: "MagicDNS name unavailable" })
+      : Effect.succeed(tailnetSuffix(name)),
+  ),
+);
+
+// Full access matches the ssh every machine already has to the others, and links below it skip
+// project setup scripts in the worktrees they create.
+const relinkEnvironments = Effect.fn("relinkEnvironments")(function* (config: PairingConfig) {
+  const suffix = yield* tailnetSuffixHere;
+  let failed = 0;
+  for (const { from, to } of planLinks(config)) {
+    yield* runOn(to, [
+      "t3",
+      "auth",
+      "pairing",
+      "create",
+      "--json",
+      "--ttl",
+      "5m",
+      "--label",
+      `link from ${from.name}`,
+    ]).pipe(
+      Effect.flatMap(decodeJson(MintedCode, `${to.name} pairing`)),
+      Effect.flatMap(({ credential }) =>
+        runOn(from, [
+          "t3",
+          "environment",
+          "link",
+          `https://${to.host}.${suffix}`,
+          "--pairing-code",
+          credential,
+          "--access",
+          "full-access",
+        ]),
+      ),
+      Effect.flatMap(() => Console.log(`${from.name} → ${to.name}: linked`)),
+      Effect.catch((error) => {
+        failed += 1;
+        return Console.log(`${from.name} → ${to.name}: failed, ${error.message}`);
+      }),
+    );
+  }
+  if (failed > 0) {
+    return yield* new RepairPairingsError({ step: "links", detail: `${failed} links failed` });
   }
 });
 
@@ -233,22 +312,13 @@ const repairPairings = Effect.fn("repairPairings")(function* (input: {
   readonly configPath: string;
   readonly ttl: string;
   readonly status: boolean;
+  readonly links: boolean;
 }) {
   const config = yield* loadConfig(input.configPath);
   if (input.status) return yield* showStatus(config);
+  if (input.links) return yield* relinkEnvironments(config);
 
-  const suffix = yield* run("tailscale", ["status", "--json"]).pipe(
-    Effect.flatMap(parseTailscaleStatus),
-    Effect.map((status) => status.magicDnsName),
-    Effect.mapError(
-      (cause) => new RepairPairingsError({ step: "tailscale", detail: String(cause) }),
-    ),
-    Effect.flatMap((name) =>
-      name === null
-        ? new RepairPairingsError({ step: "tailscale", detail: "MagicDNS name unavailable" })
-        : Effect.succeed(tailnetSuffix(name)),
-    ),
-  );
+  const suffix = yield* tailnetSuffixHere;
   const serversByName = new Map(config.servers.map((server) => [server.name, server]));
   // Remote servers are Macs, so only this machine can need xdg-open.
   const localOpener = (yield* HostProcess.Platform) === "darwin" ? "open" : "xdg-open";
@@ -314,11 +384,15 @@ export const repairPairingsCommand = Command.make(
       Flag.withDefault("1h"),
     ),
     status: Flag.Boolean("status").pipe(
-      Flag.withDescription("List each server's live sessions instead of minting codes."),
+      Flag.withDescription("List each server's live sessions and links instead of minting codes."),
+      Flag.withDefault(false),
+    ),
+    links: Flag.Boolean("links").pipe(
+      Flag.withDescription("Relink every server to every other server instead of pairing clients."),
       Flag.withDefault(false),
     ),
   },
-  ({ config, ttl, status }) => repairPairings({ configPath: config, ttl, status }),
+  ({ config, ttl, status, links }) => repairPairings({ configPath: config, ttl, status, links }),
 ).pipe(
   Command.withDescription(
     "Mint a pairing code for every client on every T3 server and deliver them in one pass.",

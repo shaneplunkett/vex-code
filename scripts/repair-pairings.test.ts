@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 
-import { planPairings, shellQuote, tailnetSuffix } from "./repair-pairings.ts";
+import { planLinks, planPairings, shellQuote, tailnetSuffix } from "./repair-pairings.ts";
 
 it("mints a code for every server except the one a desktop app already owns", () => {
   const plan = planPairings({
@@ -17,6 +17,29 @@ it("mints a code for every server except the one a desktop app already owns", ()
   assert.deepStrictEqual(
     plan.map(({ client, server }) => `${client.name} → ${server.name}`),
     ["desktop app → mini", "phone → desktop", "phone → mini"],
+  );
+});
+
+it("links every server to every other, once in each direction", () => {
+  const plan = planLinks({
+    servers: [
+      { name: "desktop", host: "desktop" },
+      { name: "mini", host: "mini-server", ssh: "mini" },
+      { name: "laptop", host: "laptop", ssh: "macbook" },
+    ],
+    clients: [],
+  });
+
+  assert.deepStrictEqual(
+    plan.map(({ from, to }) => `${from.name} → ${to.name}`),
+    [
+      "desktop → mini",
+      "desktop → laptop",
+      "mini → desktop",
+      "mini → laptop",
+      "laptop → desktop",
+      "laptop → mini",
+    ],
   );
 });
 
