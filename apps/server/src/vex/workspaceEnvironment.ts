@@ -398,13 +398,17 @@ export const makeWithOptions = Effect.fn("WorkspaceEnvironment.makeWithOptions")
   return WorkspaceEnvironment.of({
     resolve,
     status,
-    allow: (cwd) => serial.withLock(cwd, setTrust(cwd, "allow")),
-    revoke: (cwd) => serial.withLock(cwd, setTrust(cwd, "deny")),
+    allow: Effect.fn("WorkspaceEnvironment.allow")((cwd) =>
+      serial.withLock(cwd, setTrust(cwd, "allow")),
+    ),
+    revoke: Effect.fn("WorkspaceEnvironment.revoke")((cwd) =>
+      serial.withLock(cwd, setTrust(cwd, "deny")),
+    ),
     prepareWorktree,
   });
 });
 
-export const make = Effect.fn("WorkspaceEnvironment.make")(function* () {
+const make = Effect.fn("WorkspaceEnvironment.make")(function* () {
   const baseEnvironment = yield* HostProcess.Environment;
   // direnv and git are server tools, looked up on the server's own PATH so a
   // provider instance's PATH cannot switch the feature off.

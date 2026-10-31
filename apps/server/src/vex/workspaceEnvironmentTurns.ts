@@ -41,11 +41,9 @@ export interface WorkspaceEnvironmentTurnInput {
 
 export interface WorkspaceEnvironmentTurnsShape {
   /**
-   * Adds the thread directory's `.envrc` environment to a turn's runtime
-   * policy. When the environment changed since this thread's live session
-   * opened, the thread detaches so the session reopens with it. A warning row
-   * lands in the thread when the `.envrc` status changes to one that keeps the
-   * environment out of the turn.
+   * Adds the thread directory's `.envrc` environment to a turn's runtime policy. A changed
+   * environment detaches the live session so it reopens with it, and a warning row lands when the
+   * `.envrc` status changes to one that keeps the environment out of the turn.
    */
   readonly prepare: (input: WorkspaceEnvironmentTurnInput) => Effect.Effect<RuntimePolicy>;
 }
@@ -100,7 +98,7 @@ function withoutNames(
 
 const EMPTY_FINGERPRINT = workspaceEnvironmentFingerprint({});
 
-export const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
+const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
   const workspaceEnvironment = yield* WorkspaceEnvironment;
   const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
   const adapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;

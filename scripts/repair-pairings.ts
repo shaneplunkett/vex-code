@@ -1,29 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Re-pairs every client with every T3 server on Shane's tailnet in one pass.
- *
- * Reads `~/.config/vex-code/pairings.json`:
- *
- * ```json
- * {
- *   "servers": [
- *     { "name": "desktop", "host": "desktop" },
- *     { "name": "mini", "host": "mini-server", "ssh": "mini" }
- *   ],
- *   "clients": [
- *     { "name": "desktop app", "delivery": "link", "ownServer": "desktop" },
- *     { "name": "phone", "delivery": "qr" },
- *     { "name": "mini browser", "delivery": "open", "openOn": "mini" }
- *   ]
- * }
- * ```
- *
- * `host` is the server's Tailscale Serve machine name. A server without `ssh`
- * runs on this machine. `ownServer` is the server a desktop app already reaches
- * through its local bootstrap, so no code is minted for it. `open` delivery
- * opens the link in the default browser of the `openOn` server's machine; the
- * other codes land on one local page as QR codes (`qr`) or links (`link`).
+ * Re-pairs every client with every T3 server on Shane's tailnet in one pass, reading
+ * `~/.config/vex-code/pairings.json` (shaped by `PairingConfig` below).
  */
 
 import * as NodeOS from "node:os";
@@ -43,14 +22,18 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const PairingServer = Schema.Struct({
   name: Schema.String,
+  /** The server's Tailscale Serve machine name. */
   host: Schema.String,
+  /** Absent means the server runs on this machine. */
   ssh: Schema.optional(Schema.String),
 });
 type PairingServer = typeof PairingServer.Type;
 
 const PairingClient = Schema.Struct({
   name: Schema.String,
+  /** `qr` and `link` land on one local page; `open` opens the link on the `openOn` server's machine. */
   delivery: Schema.Literals(["qr", "link", "open"]),
+  /** The server a desktop app already reaches through its local bootstrap, so no code is minted. */
   ownServer: Schema.optional(Schema.String),
   openOn: Schema.optional(Schema.String),
 });

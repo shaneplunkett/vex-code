@@ -7,8 +7,9 @@ import {
   WS_METHODS,
   type WorkspaceEnvironmentStatus,
 } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
 import { ShieldAlertIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { ComposerBannerStackItem } from "../components/chat/ComposerBannerStack";
 import { useSettingsScope } from "../components/settings/SettingsScopeContext";
@@ -16,7 +17,24 @@ import { SettingsRow, SettingsSection } from "../components/settings/settingsLay
 import { Button } from "../components/ui/button";
 import { connectionAtomRuntime } from "../connection/runtime";
 import { useEnvironmentQuery } from "../state/query";
+import { environmentThreadShells } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
+
+// Turns load the `.envrc`, so a run starting or settling there re-reads the status. A thread
+// without a worktree runs at its project root, which the shell doesn't carry, so those count too.
+const directoryRunsAtom = Atom.family((key: string) =>
+  Atom.make((get) => {
+    const [environmentId, cwd] = JSON.parse(key) as [EnvironmentId, string];
+    return get(environmentThreadShells.threadShellsAtom)
+      .filter(
+        (thread) =>
+          thread.environmentId === environmentId &&
+          (thread.worktreePath === null || thread.worktreePath === cwd),
+      )
+      .map((thread) => `${thread.latestRun?.runId ?? ""}:${thread.latestRun?.status ?? ""}`)
+      .join(",");
+  }),
+);
 
 /** Web and desktop only: mobile shows the server's warning row in the thread instead. */
 const workspaceEnvironmentStatus = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
@@ -24,6 +42,8 @@ const workspaceEnvironmentStatus = createEnvironmentRpcQueryAtomFamily(connectio
   tag: WS_METHODS.workspaceEnvironmentStatus,
   staleTimeMs: 30_000,
   idleTtlMs: 5 * 60_000,
+  refreshTrigger: ({ environmentId, input }) =>
+    directoryRunsAtom(JSON.stringify([environmentId, input.cwd])),
 });
 const allowWorkspaceEnvironment = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "Allow .envrc",
@@ -54,7 +74,6 @@ function useWorkspaceEnvironment(environmentId: EnvironmentId | null, cwd: strin
   };
   return {
     status: query.data,
-    refresh,
     isPending,
     allow: () => run(allow),
     revoke: () => run(revoke),
@@ -75,25 +94,12 @@ function problemTitle(status: WorkspaceEnvironmentStatus): string | null {
   }
 }
 
-/**
- * A composer banner while the thread directory's `.envrc` can't load. It only
- * exists while something is wrong; `refreshKey` re-reads the status as turns run.
- */
+/** A composer banner that only exists while the thread directory's `.envrc` can't load. */
 export function useWorkspaceEnvironmentBannerItem(input: {
   readonly environmentId: EnvironmentId | null;
   readonly cwd: string | null;
-  readonly refreshKey: unknown;
 }): ComposerBannerStackItem | null {
-  const environment = useWorkspaceEnvironment(input.environmentId, input.cwd);
-  const { refresh } = environment;
-  const { refreshKey } = input;
-  const lastRefreshKey = useRef(refreshKey);
-  useEffect(() => {
-    if (Object.is(lastRefreshKey.current, refreshKey)) return;
-    lastRefreshKey.current = refreshKey;
-    refresh();
-  }, [refresh, refreshKey]);
-  const { status, isPending, allow } = environment;
+  const { status, isPending, allow } = useWorkspaceEnvironment(input.environmentId, input.cwd);
   if (status === null) return null;
   const title = problemTitle(status);
   if (title === null || status._tag === "inactive" || status._tag === "ready") return null;
