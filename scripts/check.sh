@@ -1,6 +1,6 @@
 #!/bin/sh
-# The gate: the one check for this repo. CI and the agents' hooks run
-# exactly this, so there's one answer to "is the repo clean".
+# The gate: the one check for this repo. The agents' hooks run exactly
+# this, so there's one answer to "is the repo clean".
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 
