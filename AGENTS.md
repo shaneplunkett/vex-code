@@ -6,9 +6,9 @@ You can think of T3 Code as an open source "bring-your-own-subscription" alterna
 
 ## Task Completion Requirements
 
-GitHub Actions is disabled for this fork. `scripts/check.sh` is the gate: Forgejo CI runs it
-on pushes to `main` and on pull requests. It bans suppression comments in fork-owned code,
-checks the Nix, then runs `vp check` and `vp run typecheck`.
+GitHub Actions is disabled for this fork, so no CI runs. `scripts/check.sh` is the gate: run it
+before pushing to `main` or opening a pull request. It bans suppression comments in fork-owned
+code, checks the Nix, then runs `vp check` and `vp run typecheck`.
 
 - For code, dependency or build changes and upstream syncs, `scripts/check.sh` must pass before considering the task completed.
   - If changing native mobile code, `vp run lint:mobile` must also pass.
@@ -27,9 +27,8 @@ adapter-side helpers in `packages/provider-core/src/server/vex/workspaceEnvironm
 so reattach any seam it reports after a sync. Use the stock upstream mobile app; keep
 mobile source upstream-owned and maintain server compatibility with it.
 
-- `origin` is `shane/vex-code` on Shane's Forgejo (`forgejo@forge`), the only normal push
-  target. Forgejo push-mirrors to GitHub `shaneplunkett/vex-code`, so there is no GitHub
-  remote and nothing pushes to GitHub directly. Use `fj` for forge work.
+- `origin` is GitHub `shaneplunkett/vex-code` (`git@github.com:shaneplunkett/vex-code.git`),
+  the only normal push target. Use `gh` for its pull requests and issues.
 - `upstream` is fetch-only with push URL `DISABLED`. Upstream writes require Shane's
   explicit request for that exact action.
 - Keep GitHub Actions disabled repository-wide in GitHub settings. Preserve upstream
