@@ -1,6 +1,7 @@
 import type {
   NodeId,
   OrchestrationV2DomainEvent,
+  OrchestrationV2ConversationMessage,
   OrchestrationV2Run,
   OrchestrationV2TurnItem,
   ProviderSessionId,
@@ -33,6 +34,7 @@ import {
 export interface WorkspaceEnvironmentTurnInput {
   readonly policy: RuntimePolicy;
   readonly run: OrchestrationV2Run;
+  readonly message: Pick<OrchestrationV2ConversationMessage, "createdBy" | "creationSource">;
   readonly attemptId: RunAttemptId;
   readonly rootNodeId: NodeId;
   readonly providerThreadId: ProviderThreadId;
@@ -42,8 +44,9 @@ export interface WorkspaceEnvironmentTurnInput {
 export interface WorkspaceEnvironmentTurnsShape {
   /**
    * Adds the thread directory's `.envrc` environment to a turn's runtime policy. A changed
-   * environment detaches the live session so it reopens with it, and a warning row lands when the
-   * `.envrc` status changes to one that keeps the environment out of the turn.
+   * environment detaches the live session so it reopens with it, unless closing the session would
+   * lose a wake or background work, which holds the change for a later turn. A warning row lands
+   * when the `.envrc` status changes to one that keeps the environment out of the turn.
    */
   readonly prepare: (input: WorkspaceEnvironmentTurnInput) => Effect.Effect<RuntimePolicy>;
 }
@@ -96,7 +99,23 @@ function withoutNames(
   return Object.fromEntries(Object.entries(diff).filter(([name]) => !names.has(name)));
 }
 
-const EMPTY_FINGERPRINT = workspaceEnvironmentFingerprint({});
+const EMPTY_ENVIRONMENT: WorkspaceEnvironmentDiff = {};
+const SESSION_NOTICE_SIGNAL = "workspace-environment-session";
+const HELD_NOTICE =
+  "The project's .envrc environment changed. This session still has work running, so it keeps its current environment until a later turn.";
+const RESTARTED_NOTICE =
+  "The project's .envrc environment changed, so the session restarted to load it.";
+
+/** A provider's own wake: its turn is already running in the live process. */
+function isProviderWake(message: WorkspaceEnvironmentTurnInput["message"]): boolean {
+  return message.createdBy === "agent" && message.creationSource === "provider";
+}
+
+function withEnvironment(policy: RuntimePolicy, environment: WorkspaceEnvironmentDiff) {
+  return Object.keys(environment).length === 0
+    ? policy
+    : ProviderAdapterV2RuntimePolicy.make({ ...policy, environment });
+}
 
 const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
   const workspaceEnvironment = yield* WorkspaceEnvironment;
@@ -107,8 +126,9 @@ const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   // In memory on purpose: a restart has no live sessions to refresh, and the
   // first turn after it re-posts any warning that still applies.
-  const appliedFingerprints = new Map<string, string>();
+  const appliedEnvironments = new Map<string, WorkspaceEnvironmentDiff>();
   const postedNotices = new Map<string, string>();
+  const heldFingerprints = new Map<string, string>();
 
   /** Names the provider instance sets explicitly, which win over the `.envrc`. */
   const explicitInstanceNames = Effect.fn("WorkspaceEnvironmentTurns.explicitInstanceNames")(
@@ -123,12 +143,13 @@ const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
   const postNotice = Effect.fn("WorkspaceEnvironmentTurns.postNotice")(function* (
     input: WorkspaceEnvironmentTurnInput,
     message: string,
+    signal = "workspace-environment",
   ) {
     const now = yield* DateTime.now;
     const item: OrchestrationV2TurnItem = {
       id: idAllocator.derive.runSignalTurnItem({
         runId: input.run.id,
-        signal: "workspace-environment",
+        signal,
       }),
       threadId: input.run.threadId,
       runId: input.run.id,
@@ -198,8 +219,22 @@ const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
       const sessionKey = `${input.providerSessionId}\u0000${run.threadId}`;
       const live = yield* providerSessions.get(input.providerSessionId);
       // A session opened outside a turn start (a rollback, say) has no environment.
-      const applied = appliedFingerprints.get(sessionKey) ?? EMPTY_FINGERPRINT;
-      if (Option.isSome(live) && applied !== fingerprint) {
+      const applied = appliedEnvironments.get(sessionKey) ?? EMPTY_ENVIRONMENT;
+      if (Option.isSome(live)) {
+        if (workspaceEnvironmentFingerprint(applied) === fingerprint) {
+          heldFingerprints.delete(sessionKey);
+          return withEnvironment(policy, applied);
+        }
+        const mustKeepSession =
+          isProviderWake(input.message) ||
+          (yield* live.value.hasPendingBackgroundWork ?? Effect.succeed(false));
+        if (mustKeepSession) {
+          if (heldFingerprints.get(sessionKey) !== fingerprint) {
+            heldFingerprints.set(sessionKey, fingerprint);
+            yield* postNotice(input, HELD_NOTICE, SESSION_NOTICE_SIGNAL);
+          }
+          return withEnvironment(policy, applied);
+        }
         // The same path a worktree change takes: a session of its own closes,
         // a shared one (Codex) unloads this thread, and the open below brings
         // the conversation back with the new environment.
@@ -208,12 +243,12 @@ const make = Effect.fn("WorkspaceEnvironmentTurns.make")(function* () {
           threadId: run.threadId,
           detail: "The project's .envrc environment changed.",
         });
+        yield* postNotice(input, RESTARTED_NOTICE, SESSION_NOTICE_SIGNAL);
       }
-      appliedFingerprints.set(sessionKey, fingerprint);
+      heldFingerprints.delete(sessionKey);
+      appliedEnvironments.set(sessionKey, environment);
 
-      return Object.keys(environment).length === 0
-        ? policy
-        : ProviderAdapterV2RuntimePolicy.make({ ...policy, environment });
+      return withEnvironment(policy, environment);
     },
     // The environment is an addition to the turn. Nothing here may stop it.
     (effect, input) =>

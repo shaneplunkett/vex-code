@@ -52,9 +52,16 @@ function isProtectedVariable(name: string): boolean {
   );
 }
 
-/** A stable identity for a diff, so a changed `.envrc` result can be detected. */
+/**
+ * A stable identity for a diff, so a changed `.envrc` result can be detected. direnv rewrites its
+ * `DIRENV_*` bookkeeping when a watched file is merely touched, so those names don't count.
+ */
 export function workspaceEnvironmentFingerprint(diff: WorkspaceEnvironmentDiff): string {
-  return JSON.stringify(Object.entries(diff).toSorted(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify(
+    Object.entries(diff)
+      .filter(([name]) => !name.startsWith("DIRENV_"))
+      .toSorted(([a], [b]) => a.localeCompare(b)),
+  );
 }
 
 const DirenvExport = Schema.Record(Schema.String, Schema.NullOr(Schema.String));

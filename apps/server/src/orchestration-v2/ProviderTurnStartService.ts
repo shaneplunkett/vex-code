@@ -728,6 +728,7 @@ export const layer: Layer.Layer<
       const resolvedRuntimePolicy = yield* workspaceEnvironmentTurns.prepare({
         policy: resolvedPolicy.success,
         run,
+        message,
         attemptId: attempt.id,
         rootNodeId: rootNode.id,
         providerThreadId: providerThread.id,

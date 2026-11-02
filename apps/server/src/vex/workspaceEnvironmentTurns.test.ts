@@ -25,6 +25,7 @@ interface World {
   driver: string;
   sharedSessions: boolean;
   sessionLive: boolean;
+  backgroundWork: boolean;
   instanceEnvironment: ReadonlyArray<{ name: string; value: string }>;
   readonly detached: Array<ProviderSessionId>;
   readonly notices: Array<string>;
@@ -50,6 +51,7 @@ const makeWorld = (): World => ({
   driver: "codex",
   sharedSessions: true,
   sessionLive: false,
+  backgroundWork: false,
   instanceEnvironment: [],
   detached: [],
   notices: [],
@@ -69,7 +71,13 @@ const layerFor = (world: World) =>
         } as unknown as WorkspaceEnvironment["Service"]),
         Layer.succeed(ProviderSessionManager.ProviderSessionManagerV2, {
           get: () =>
-            Effect.sync(() => (world.sessionLive ? Option.some({} as never) : Option.none())),
+            Effect.sync(() =>
+              world.sessionLive
+                ? Option.some({
+                    hasPendingBackgroundWork: Effect.sync(() => world.backgroundWork),
+                  } as never)
+                : Option.none(),
+            ),
           detach: (input: { readonly providerSessionId: ProviderSessionId }) =>
             Effect.sync(() => {
               world.detached.push(input.providerSessionId);
@@ -111,17 +119,21 @@ const layerFor = (world: World) =>
     ),
   );
 
-const prepare = Effect.gen(function* () {
-  const turns = yield* WorkspaceEnvironmentTurns.WorkspaceEnvironmentTurns;
-  return yield* turns.prepare({
-    policy,
-    run,
-    attemptId: "attempt-1" as never,
-    rootNodeId: "node-1" as never,
-    providerThreadId: "provider-thread-1" as never,
-    providerSessionId,
+const prepareFor = (message: { readonly createdBy: string; readonly creationSource: string }) =>
+  Effect.gen(function* () {
+    const turns = yield* WorkspaceEnvironmentTurns.WorkspaceEnvironmentTurns;
+    return yield* turns.prepare({
+      policy,
+      run,
+      message: message as never,
+      attemptId: "attempt-1" as never,
+      rootNodeId: "node-1" as never,
+      providerThreadId: "provider-thread-1" as never,
+      providerSessionId,
+    });
   });
-});
+const prepare = prepareFor({ createdBy: "user", creationSource: "web" });
+const prepareWake = prepareFor({ createdBy: "agent", creationSource: "provider" });
 
 const turnWith = (world: World) => prepare.pipe(Effect.provide(layerFor(world)));
 
@@ -146,10 +158,47 @@ describe("WorkspaceEnvironmentTurns", () => {
         yield* prepare;
         expect(world.detached).toEqual([]);
 
+        // Touching a watched file rewrites direnv's bookkeeping and nothing else.
+        world.environment = { ...world.environment, DIRENV_WATCHES: "new", DIRENV_DIFF: "new" };
+        yield* prepare;
+        expect(world.detached).toEqual([]);
+        expect(world.notices).toEqual([]);
+
         world.environment = { PATH: "/new-flake/bin" };
         const prepared = yield* prepare;
         expect(world.detached).toEqual([providerSessionId]);
         expect(prepared.environment).toEqual({ PATH: "/new-flake/bin" });
+      }).pipe(Effect.provide(layerFor(world)));
+    }),
+  );
+
+  it.effect("holds a changed environment until no wake or background work needs the session", () =>
+    Effect.gen(function* () {
+      const world = makeWorld();
+      const opened = { PATH: "/flake/bin", API_URL: "https://dev" };
+      yield* Effect.gen(function* () {
+        yield* prepare;
+        world.sessionLive = true;
+        world.environment = { PATH: "/new-flake/bin" };
+
+        // The wake's turn is already running in this process.
+        const wake = yield* prepareWake;
+        expect(world.detached).toEqual([]);
+        expect(wake.environment).toEqual(opened);
+        expect(world.notices).toHaveLength(1);
+
+        // Closing the process would kill the background work.
+        world.backgroundWork = true;
+        const steer = yield* prepare;
+        expect(world.detached).toEqual([]);
+        expect(steer.environment).toEqual(opened);
+        expect(world.notices).toHaveLength(1);
+
+        world.backgroundWork = false;
+        const quiet = yield* prepare;
+        expect(world.detached).toEqual([providerSessionId]);
+        expect(quiet.environment).toEqual({ PATH: "/new-flake/bin" });
+        expect(world.notices).toHaveLength(2);
       }).pipe(Effect.provide(layerFor(world)));
     }),
   );
