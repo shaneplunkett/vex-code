@@ -12,7 +12,6 @@ import type {
 } from "@t3tools/contracts";
 import type { ProviderChangeRequest } from "@t3tools/source-control-core/server/PullRequestProvider";
 import { dedupeChecks } from "@t3tools/source-control-core/server/pullRequestChecks";
-import { oldestStatusFirst } from "./vex/statusOrder.ts";
 
 export const ForgejoUser = Schema.Struct({
   login: Schema.String,
@@ -65,8 +64,6 @@ export const ForgejoPullRequest = Schema.Struct({
   labels: Schema.NullOr(Schema.Array(ForgejoLabel)),
   requested_reviewers: Schema.optional(Schema.NullOr(Schema.Array(ForgejoUser))),
 });
-/** An issues-search row, which for a pull request names it and little else that is useful. */
-export const ForgejoIssueRef = Schema.Struct({ number: Schema.Int });
 export const ForgejoComment = Schema.Struct({
   id: Schema.Int,
   body: Schema.String,
@@ -80,7 +77,6 @@ export const ForgejoReview = Schema.Struct({
   body: Schema.String,
   user: Schema.NullOr(ForgejoUser),
   state: Schema.String,
-  dismissed: Schema.optional(Schema.Boolean),
   submitted_at: Schema.String,
   html_url: Schema.optional(Schema.String),
   comments_count: Schema.Int,
@@ -238,9 +234,10 @@ export function forgejoChecks(
   pullRequestUrl: string,
 ): ReadonlyArray<PullRequestCheck> {
   return dedupeChecks(
-    oldestStatusFirst(statuses).map((status) => ({
+    statuses.map((status) => ({
       workflowName: null,
       at: status.updated_at,
+      ...(status.id === undefined ? {} : { sequence: status.id }),
       check: {
         name: status.context || "check",
         description: status.description || null,
