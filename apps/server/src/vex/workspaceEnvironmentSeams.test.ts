@@ -43,7 +43,7 @@ const SEAMS: ReadonlyArray<{
   {
     file: "packages/provider-acp/src/server/adapter.ts",
     expects: ["workspaceEnvironment: input.runtimePolicy.environment"],
-    why: "ACP flavors (Grok, Antigravity, registry) receive the diff",
+    why: "ACP flavors (Grok, Kiro, Antigravity, registry) receive the diff",
   },
   {
     file: "packages/provider-acp/src/server/AcpSessionRuntime.ts",
