@@ -7,6 +7,7 @@ import {
   WS_METHODS,
   type WorkspaceEnvironmentStatus,
 } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 import { Atom } from "effect/reactivity";
 import { ShieldAlertIcon } from "lucide-react";
 import { useState } from "react";
@@ -16,6 +17,7 @@ import { useSettingsScope } from "../components/settings/SettingsScopeContext";
 import { SettingsRow, SettingsSection } from "../components/settings/settingsLayout";
 import { Button } from "../components/ui/button";
 import { connectionAtomRuntime } from "../connection/runtime";
+import type { MessageResolver } from "../i18n/messages";
 import { useEnvironmentQuery } from "../state/query";
 import { environmentThreadShells } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -46,11 +48,11 @@ const workspaceEnvironmentStatus = createEnvironmentRpcQueryAtomFamily(connectio
     directoryRunsAtom(JSON.stringify([environmentId, input.cwd])),
 });
 const allowWorkspaceEnvironment = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "Allow .envrc",
+  label: "workspace-environment:allow",
   tag: WS_METHODS.workspaceEnvironmentAllow,
 });
 const revokeWorkspaceEnvironment = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "Revoke .envrc",
+  label: "workspace-environment:revoke",
   tag: WS_METHODS.workspaceEnvironmentRevoke,
 });
 
@@ -80,17 +82,17 @@ function useWorkspaceEnvironment(environmentId: EnvironmentId | null, cwd: strin
   };
 }
 
-function problemTitle(status: WorkspaceEnvironmentStatus): string | null {
+function problemTitle(status: WorkspaceEnvironmentStatus, resolve: MessageResolver): string | null {
   switch (status._tag) {
     case "inactive":
     case "ready":
       return null;
     case "blocked":
-      return "This project's .envrc is blocked";
+      return resolve(msg("This project's .envrc is blocked"));
     case "failed":
-      return "This project's .envrc failed to load";
+      return resolve(msg("This project's .envrc failed to load"));
     case "direnvMissing":
-      return "direnv isn't installed, so this project's .envrc isn't loaded";
+      return resolve(msg("direnv isn't installed, so this project's .envrc isn't loaded"));
   }
 }
 
@@ -100,8 +102,10 @@ export function useWorkspaceEnvironmentBannerItem(input: {
   readonly cwd: string | null;
 }): ComposerBannerStackItem | null {
   const { status, isPending, allow } = useWorkspaceEnvironment(input.environmentId, input.cwd);
+  const m = useMessages();
+  const gt = useGT();
   if (status === null) return null;
-  const title = problemTitle(status);
+  const title = problemTitle(status, m);
   if (title === null || status._tag === "inactive" || status._tag === "ready") return null;
   return {
     id: `workspace-environment:${status.envrcPath}`,
@@ -112,13 +116,15 @@ export function useWorkspaceEnvironmentBannerItem(input: {
       status._tag === "failed"
         ? status.detail
         : status._tag === "blocked"
-          ? `Turns start without ${status.envrcPath} until you allow it.`
+          ? gt("Turns start without {envrcPath} until you allow it.", {
+              envrcPath: status.envrcPath,
+            })
           : status.envrcPath,
     ...(status._tag === "blocked"
       ? {
           actions: (
             <Button size="xs" variant="outline" disabled={isPending} onClick={allow}>
-              Allow
+              <T>Allow</T>
             </Button>
           ),
         }
@@ -135,28 +141,37 @@ function WorkspaceEnvironmentRow(props: {
     props.environmentId,
     props.cwd,
   );
+  const gt = useGT();
   if (status === null || status._tag === "inactive") return null;
   const description =
     status._tag === "ready"
-      ? `Agents, terminals and scripts load ${status.envrcPath}.`
+      ? gt("Agents, terminals and scripts load {envrcPath}.", { envrcPath: status.envrcPath })
       : status._tag === "failed"
         ? status.detail
         : status._tag === "blocked"
-          ? `${status.envrcPath} is blocked, so turns start without it.`
-          : `${status.envrcPath} needs direnv on the server's PATH.`;
+          ? gt("{envrcPath} is blocked, so turns start without it.", {
+              envrcPath: status.envrcPath,
+            })
+          : gt("{envrcPath} needs direnv on the server's PATH.", { envrcPath: status.envrcPath });
   return (
-    <SettingsSection title={props.label === null ? "Environment" : `Environment on ${props.label}`}>
+    <SettingsSection
+      title={
+        props.label === null
+          ? gt("Environment")
+          : gt("Environment on {label}", { label: props.label })
+      }
+    >
       <SettingsRow
         title=".envrc"
         description={description}
         control={
           status._tag === "ready" || status._tag === "failed" ? (
             <Button size="sm" variant="outline" disabled={isPending} onClick={revoke}>
-              Revoke
+              <T>Revoke</T>
             </Button>
           ) : status._tag === "blocked" ? (
             <Button size="sm" variant="outline" disabled={isPending} onClick={allow}>
-              Allow
+              <T>Allow</T>
             </Button>
           ) : null
         }
